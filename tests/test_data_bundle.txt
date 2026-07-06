@@ -1,0 +1,382 @@
+==> D_armless.fa <==
+>mtdbD00037746|Cys|GCA|Sphenodon punctatus
+AGGCCTGTTAAGTACTGAGCTGCAAACTTAGGAAAGATTAGAAATATAGTCCAGGCTT
+>mtdbD00038055|Ser1|GCU|Mus musculus
+AAGAAAGATTGCAAGAACTGCTAATTCATGCTTCCATGTTTAAAAACATGGCTTTCTTA
+>mtdbD00063515|Ser1|GCU|Homo sapiens
+GAGAAAGCTCACAAGAACTGCTAACTCATGCCCCCATGTCTAACAACATGGCTTTCTCA
+
+==> D_armless_human.fa <==
+>mtdbD00063515|Ser1|GCU|Homo_sapiens
+GAGAAAGCTCACAAGAACTGCTAACTCATGCCCCCATGTCTAACAACATGGCTTTCTCA
+
+==> T_armless.fa <==
+>mtdbD00031151|Pro|UGG|Ascaris suum
+CAGTAGGTAGTTTatTTTTAAAATGTAGTATTTGGGTTACTGTGAATTTTTACTGA
+>mtdbD00031152|Val|UAC|Ascaris suum
+AAACTTTTAGTTTAATTTAGAATTTCTCGCTTACAATGAGAGGGTTTATTAAGTTTT
+>mtdbD00031153|Trp|UCA|Ascaris suum
+ACAGATTTAAGTTaAGTTTAAACTCTTGGTTTTCAAAACCAAAAATTTTACTCTGTA
+>mtdbD00031155|Asn|GUU|Ascaris suum
+TAAGAGTTAGTTTAATATTAGAATTGTTGACTGTTGATCAATGGGTGATTCTCTTAG
+>mtdbD00031156|Tyr|GUA|Ascaris suum
+AAAAGATTAGTTTATTATTaAAATGTTAGATTGTAAATCTAAAGAATTTTTTCTTTTG
+>mtdbD00031157|Leu2|UAA|Ascaris suum
+GTTGTTATAGCATAAGAAGTGCATTTGTTTTAAGCGTAAAAGATATGGGACAACT
+>mtdbD00031158|Ile|GAU|Ascaris suum
+ATTATTTTAGTAAAATTTtaTTATGTCGTCTTGATAAGGCGGAGTTCTTTTTGAAATAATA
+>mtdbD00031159|Phe|GAA|Ascaris suum
+ACTCTGTTAGTTTATGttTTAAAATATGACTTTGAAGAAGTTGGGAAATGTTAGGAGTG
+>mtdbD00031160|Cys|GCA|Ascaris suum
+GAGTCTTTAGTATatTTTTAGTATGCTTAATTGCAGATTAGGTGGATTTGTGGGCTTT
+>mtdbD00031162|Asp|GUC|Ascaris suum
+AAAACTATAGTATaatTTTTTATTATACCTTATTGTCGATGGGGAGAATTTTTAGTTTTA
+>mtdbD00031163|Gly|UCC|Ascaris suum
+GATCTTTTAGTATaTTTTTGTACATTTGACTTCCAATCAGATAGTTTTAAAGGTTA
+>mtdbD00031164|His|GUG|Ascaris suum
+AGCTTTGTAGTTTATGTGAAAATGCTTGTTTGTGATATGAGTGAAATTGGAGCTT
+>mtdbD00031165|Ala|UGC|Ascaris suum
+GGGGCTGTATTTTaaGTTTAAAATATGCGCTTTGCAAGCGGATGATTCTGGCTCTA
+>mtdbD00039778|Asn|GUU|Habronattus oregonensis
+TAGATAAgGAGCTGATAGCgTTTTCATTGTTAATGAAATGAAGTAGAGGggctGTAACTAG
+>mtdbD00039780|His|GUG|Habronattus oregonensis
+ATCTAACTAGTTTAATAAAACAATAGTTTGTGGAACTATAATTTCTAAAATC
+>mtdbD00039781|Pro|UGG|Habronattus oregonensis
+TAATTAATTTAACAAAAATATCTACTTTGGATGTAGAAAATCTATACATTAA
+>mtdbD00039782|Thr|UGU|Habronattus oregonensis
+GGTTGATTAGTTTAAGTAAAACAGAAGTTTTGTAAATTTCAAATCTAATATAAGATT
+
+==> both_armless_mature.fa <==
+>NC_008640.1:3203-3266|Romanomermis_culicivorax|Ile|GAU
+CTTAATAGAGAACAATTTAAATTGATAATTTAAATTAAAATTTAAGACCA
+
+==> canonical.fa <==
+>mtdbD00063498|Phe|GAA|Homo sapiens
+GTTTATGTAGCTTACCtccTCAAAGCAATACACTGAAAATGTTTAGACGGGCTcACATCACCCCATAAACA
+>mtdbD00063499|Val|UAC|Homo sapiens
+CAGAGTGTAGCTTAACACAAAGCACCCAACTTACACTTAGGAGATTTCAAcTTAACTTGACCGCTCTGA
+>mtdbD00063500|Leu2|UAA|Homo sapiens
+GTTAAGATGGCAGAGCCCGgtAATcGCATAAAACTTAAAACTTTACAGTcAGAGGTTCAATTCCTCTTCTTAACA
+>mtdbD00063501|Ile|GAU|Homo sapiens
+AGAAATATGTCTGATAAAAGAGTTACTTTGATAGAGTAAATAATAGGAGCTTAAACCCCCTTATTTCTA
+>mtdbD00063502|Gln|UUG|Homo sapiens
+TAGGATGGGGTGTGaTAGGTGGCACGGAGAATTTTGGATTCTCAGGGATGGGTTCGATTCTCATAGTCCTAG
+>mtdbD00063503|Met|CAU|Homo sapiens
+AGTAAGGTCAGCTAAATAAGCTATCGGGCCCATACCCCGAAAATGTTGGTTATACCCTTCCCGTACTA
+>mtdbD00063504|Trp|UCA|Homo sapiens
+AGAAATTTAGGTTaAATACAGACCAAGAGCCTTCAAAGCCCTCAGTAAGTTGCAATACTTAATTTCTG
+>mtdbD00063505|Ala|UGC|Homo sapiens
+AAGGGCTTAGCTTAATTAAAGTGGCTGATTTGCGTTCAGTTGATGCAGAGTGGggTTTTGCAGTCCTTA
+>mtdbD00063506|Asn|GUU|Homo sapiens
+TAGATTGAAGCCAgTTGATTAGGGTGCTTAGCTGTTAACTAAGTGTTTGTGGGTTTAAGTCCCATTGGTCTAG
+>mtdbD00063507|Cys|GCA|Homo sapiens
+AGCTCCGAGGTGATTTTCATATTGAATTGCAAATTCGAAGAAGCAGCTTCAAACCTGCCGGGGCTT
+>mtdbD00063508|Tyr|GUA|Homo sapiens
+GGTAAAATGGCTGAGTGAAGCATTGGACTGTAAATCTAAAGACAGGGGTTAGGCCTCTTTTTACCA
+>mtdbD00063509|Ser2|UGA|Homo sapiens
+GAAAAAGTCATgGAGGCCATGGGGTTGGCTTGAAACCAGCTTTGGGGGGTTCGATTCCTTCCTTTTTTG
+>mtdbD00063510|Asp|GUC|Homo sapiens
+AAGGTATTAGAAAAACCATTTCATAACTTTGTCAAAGTTAAATTATAGGCTAAATCCTATATATCTTA
+>mtdbD00063511|Lys|UUU|Homo sapiens
+CACTGTAAAGCTAACTTAGCATTAACCTTTTAAGTTAAAGATtAAGAGAacCAACACCTCTTTACAGTGA
+>mtdbD00063512|Gly|UCC|Homo sapiens
+ACTCTTTTAGTATAAATAGTACCGTTAACTTCCAATTAACTAGTTTTGACAACATTCAAAAAAGAGTA
+>mtdbD00063513|Arg|UCG|Homo sapiens
+TGGTATATAGTTTAAACAAAACGAATGATTTCGACTCATTAAATTATGATAATCATATTTACCAA
+>mtdbD00063514|His|GUG|Homo sapiens
+GTAAATATAGTTTAACCAAAACATCAGATTGTGAATCTGACAACAGAGGcttACGACCCCTTATTTACC
+>mtdbD00063516|Leu1|UAG|Homo sapiens
+ACTTTTAAAGGATAACAGCTATCCATTGGTCTTAGGCCCCAAAAATTTTGGTGCAACTCCAAATAAAAGTA
+>mtdbD00063517|Glu|UUC|Homo sapiens
+GTTCTTGTAGTTGAAATACAACGATGGTTTTTCATATCATTGGTCGTGGTTGTAGTCCGTGCGAGAATA
+>mtdbD00063518|Thr|UGU|Homo sapiens
+GTCCTTGTAGTATAAACTAATACACCAGTCTTGTAAACCGGAGATGAAAACCTTTTTCCAAGGACA
+>mtdbD00063519|Pro|UGG|Homo sapiens
+CAGAGAATAGTTTaAATTAGAATCTTAGCTTTGGGTGCTAATGGTGGAGTTAAAGACTTTTTCTCTGA
+>mtdbD00125563|Glu|UUC|Saccharomyces cerevisiae
+GACCTTATCGTCTaATGGTtaCGACATCACCTCTTCATGTTGATAATATCGGTTCGATTCCGATTAAGGTTA
+>mtdbD00125564|His|GUG|Saccharomyces cerevisiae
+GTGAATATATTTCAATGGTAGAAAATACGCTTGTGGTGCGTTAAATCTGAGttcGATTCTCAGTATTCACC
+>mtdbD00125565|Lys|UUU|Saccharomyces cerevisiae
+GAGAATATTGTTTAATGGtaAAACAGTTGTCTTTTAAGCAACCCATgCTTGGTTCAACTCCAGCTATTCTCA
+>mtdbD00125566|Tyr|GUA|Saccharomyces cerevisiae
+GGAGGGATTTTCAatgttggtAGTTGGAGTTGAGCTGTAAACTCAAtgacttaggtCTTCATAGGTTCAATTCCTATTCCCTTCA
+>mtdbD00339284|Lys|UUU|Schizosaccharomyces pombe
+GGGGATGTAGCTCAATGGttaGAGCTTTCGCCTTTTAAGCGATaGGATAAGGGTTCAAATCCCTTCAGACCCA
+>mtdbD00339285|Ser1|GCU|Schizosaccharomyces pombe
+GGAAAAATAGTTctaattggTAAGAAGGATACTTGCTACGTATCtggtgaataaCCTTGTGAGTTCGAGTCTCACTTTTTCCG
+>mtdbD00339286|Asn|GUU|Schizosaccharomyces pombe
+GTTGTTGTAGCTCAATGGTAGAGCAAGTCACTGTTAATGACCTGATAGTGGTTCGATTCCACTCAATAACG
+>mtdbD00339287|Thr|UGU|Schizosaccharomyces pombe
+GCTAATTTAACTCAATTGgtaGAGTGCGTACCTTGTAAGTACGaAGTTAGAGGTTCAaTTCCTCTAATTAGCA
+>mtdbD00339288|Phe|GAA|Schizosaccharomyces pombe
+GCTCTGATAACTTAACggTTAAAGTGCAGTATTGAAGCTGCTGAGATATTGGttcGATTCCATTTCAGAGCA
+>mtdbD00339289|Leu1|UAG|Schizosaccharomyces pombe
+GCAGATGTGATGAAATtGGTAAACATGTTTACCTTAGGAGTAAAATCTTGAAGGTTCGAATCCTTCCATCTGTA
+>mtdbD00339290|Leu2|UAG|Schizosaccharomyces pombe
+GCAGATGTGATGAAATTGGtaAACATGTTTACCTTAGGAGTAAAATCTtGAAGGTTCGAATCCTTCCATCTGTA
+>mtdbD00339291|His|GUG|Schizosaccharomyces pombe
+GTGATTGTAATTCAATGGTAGAATGCTTATTTGTGGCATAAGAAGTtCTTGGttcGATTCCAAGTAATCACC
+>mtdbD00339292|Ile|GAU|Schizosaccharomyces pombe
+AGTTCTTTAACTTaaAAGGTcaGAGTGCAGACTTGATAAGTCTGTGGTATTGGTTCGATTCCAATAAGAACTA
+>mtdbD00339293|Val|UAC|Schizosaccharomyces pombe
+AGGAGAATAGCTTAATTGGtaGAGCACTTACCTTACAAGTAAGATTAtAAGGGTTCAAATCCCTTTTCTCCTA
+>mtdbD00339294|Ala|UGC|Schizosaccharomyces pombe
+GGGGATTTAATTTaattGGTTAGAATATTGTGTTTGCACCACAAAAATCTGGTTTCGagTACCAGAATCTCCA
+
+==> canonical_E_human.fa <==
+>mtdbD00063517|Glu|UUC|Homo_sapiens
+GTTCTTGTAGTTGAAATACAACGATGGTTTTTCATATCATTGGTCGTGGTTGTAGTCCGTGCGAGAATA
+
+==> canonical_L1_human.fa <==
+>mtdbD00063516|Leu1|UAG|Homo_sapiens
+ACTTTTAAAGGATAACAGCTATCCATTGGTCTTAGGCCCCAAAAATTTTGGTGCAACTCCAAATAAAAGTA
+
+==> canonical_T_human.fa <==
+>mtdbD00063518|Thr|UGU|Homo_sapiens
+GTCCTTGTAGTATAAACTAATACACCAGTCTTGTAAACCGGAGATGAAAACCTTTTTCCAAGGACA
+
+==> aln_Darmless_qutrna.sto <==
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00037746|Cys|GCA|Sphenodon DE punctatus
+#=GS mtdbD00038055|Ser1|GCU|Mus      DE musculus
+#=GS mtdbD00063515|Ser1|GCU|Homo     DE sapiens
+
+mtdbD00037746|Cys|GCA|Sphenodon         AGGCCUG..Uua-aguACUGAGC-UGCAAACUUAG------GAAA----GA--------------------.------UUA.GAaauauagU-..----CCAGGCUU-
+#=GR mtdbD00037746|Cys|GCA|Sphenodon PP **87777..665.3599999999.77999999999......8887....55...........................677.7744433322.......37777777.
+mtdbD00038055|Ser1|GCU|Mus              AAGAAAGauU..G...CAAGAACUGCUAA---UUC--------------AUG------------------CuUCCAUGUUUaAA.......AA..CAUGGCUUUCUUA
+#=GR mtdbD00038055|Ser1|GCU|Mus      PP ********99..*...9*******99*99...555..............564..................45******987256.......8*..*************
+mtdbD00063515|Ser1|GCU|Homo             GAGAAAG.cU.cA...CAAGAACUGCUAACUC-----------------AUG------------------CcCCCAUG-UC.UA.......ACaaCAUGGCUUUCUCA
+#=GR mtdbD00063515|Ser1|GCU|Homo     PP *******.98.99...99999***99*99555.................464..................46889***.77.77.......77779************
+#=GC SS_cons                            (((((((..,..,...<<<<________>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<___.__.......__..>>>>>))))))):
+#=GC RF                                 =======..+..+...====++++++++====+=====++***++=====++=======++++=======+.+=====+++.++.......++..============+
+//
+
+==> aln_E_canonical_qutrna.sto <==
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+mtdbD00063517|Glu|UUC|Homo_sapiens         GUUCUUGUAGUUGAAA---UACAACGAUGGUUUUUCAUAUCAUUG------------------GUCGUGGUUGUAGUCCGUGCGAGAAUA
+#=GR mtdbD00063517|Glu|UUC|Homo_sapiens PP ****************...99***********************7..................7**************************
+#=GC SS_cons                               (((((((,,<<<<________>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,,<<<<<_______>>>>>))))))):
+#=GC RF                                    =======++====++++++++====+=====++***++=====++=======++++=======++=====+++++++============+
+//
+
+==> aln_L1_canonical_qutrna.sto <==
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+mtdbD00063516|Leu1|UAG|Homo_sapiens         ACUUUUAAAGGAUAAC-AGCUAUCCAUUGGUCUUAGGCCCCAAA-------------------AaUUUUGGUGCAACUCCAAAUAAAAGUA
+#=GR mtdbD00063516|Leu1|UAG|Homo_sapiens PP ****************.***************************...................99**************************
+#=GC SS_cons                                (((((((,,<<<<________>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<_______>>>>>))))))):
+#=GC RF                                     =======++====++++++++====+=====++***++=====++=======++++=======+.+=====+++++++============+
+//
+
+==> aln_S1_qutrna.sto <==
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+mtdbD00063515|Ser1|GCU|Homo_sapiens         GAGAAAGcUcACAAGAACUGCUAACUC-----------------AUG------------------CcCCCAUG-UCUAACaaCAUGGCUUUCUCA
+#=GR mtdbD00063515|Ser1|GCU|Homo_sapiens PP *******989999999***99*99555.................464..................46889***.777777779************
+#=GC SS_cons                                (((((((.,.,<<<<________>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<_______..>>>>>))))))):
+#=GC RF                                     =======.+.+====++++++++====+=====++***++=====++=======++++=======+.+=====+++++++..============+
+//
+
+==> aln_T_canonical_qutrna.sto <==
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+mtdbD00063518|Thr|UGU|Homo_sapiens         GUCCUUGUAGUAUAAAC--UAAUACACCAGUCUUGUAAACCGGA-------------------GaUGAA-----AACCUUUUuCCAAGGACA
+#=GR mtdbD00063518|Thr|UGU|Homo_sapiens PP *****************..9************************...................77**99.....677654444*********
+#=GC SS_cons                               (((((((,,<<<<________>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<_______>>>>.>))))))):
+#=GC RF                                    =======++====++++++++====+=====++***++=====++=======++++=======+.+=====+++++++====.========+
+//
+
+==> aln_Tarmless_qutrna.sto <==
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00031151|Pro|UGG|Ascaris     DE suum
+#=GS mtdbD00031152|Val|UAC|Ascaris     DE suum
+#=GS mtdbD00031153|Trp|UCA|Ascaris     DE suum
+#=GS mtdbD00031155|Asn|GUU|Ascaris     DE suum
+#=GS mtdbD00031156|Tyr|GUA|Ascaris     DE suum
+#=GS mtdbD00031157|Leu2|UAA|Ascaris    DE suum
+#=GS mtdbD00031158|Ile|GAU|Ascaris     DE suum
+#=GS mtdbD00031159|Phe|GAA|Ascaris     DE suum
+#=GS mtdbD00031160|Cys|GCA|Ascaris     DE suum
+#=GS mtdbD00031162|Asp|GUC|Ascaris     DE suum
+#=GS mtdbD00031163|Gly|UCC|Ascaris     DE suum
+#=GS mtdbD00031164|His|GUG|Ascaris     DE suum
+#=GS mtdbD00031165|Ala|UGC|Ascaris     DE suum
+#=GS mtdbD00039778|Asn|GUU|Habronattus DE oregonensis
+#=GS mtdbD00039780|His|GUG|Habronattus DE oregonensis
+#=GS mtdbD00039781|Pro|UGG|Habronattus DE oregonensis
+#=GS mtdbD00039782|Thr|UGU|Habronattus DE oregonensis
+
+mtdbD00031151|Pro|UGG|Ascaris             CAGUAGG......UA.GUUUA.UUU.u--U..AAAAUG.UAGUAUUUGGGUUACUGUG-------------------.---------..AA.....UU-----..UUUA.CU...GA
+#=GR mtdbD00031151|Pro|UGG|Ascaris     PP *******......**.*****.***.9..9..******.******************9...............................**.....**.......****.**...**
+mtdbD00031152|Val|UAC|Ascaris             AAACUUU......UA.GUUUA.AUU..--U..AGAAUU.UCUCGCUUACAAUGAGAGG------------------GuUU-------..--.....AU-----..UAAG.UU...UU
+#=GR mtdbD00031152|Val|UAC|Ascaris     PP *******......**.*****.**9....8..******.******************9..................4333................44.......7889.99...99
+mtdbD00031153|Trp|UCA|Ascaris             ACAGAUU......UAaGUUAA.GUU..--U..AAACUC.UUGGUUUUCAAAACCAAA--------------------.---------..AA.....UUU---U..ACUC.UG...UA
+#=GR mtdbD00031153|Trp|UCA|Ascaris     PP *******......*7366666.664....5..666666.9***************99................................99.....994...4..****.**...**
+mtdbD00031155|Asn|GUU|Ascaris             UAAGAGU......UA.GUUUA.AU-..AUU..AGAAUU.GUUGACUGUUGAUCAAUGG------------------G.U--------..GA.....UU-----..-CUC.UU...AG
+#=GR mtdbD00031155|Asn|GUU|Ascaris     PP *******......**.*****.**...77*..******.******************9..................5.4..........77.....77........999.9*...**
+mtdbD00031156|Tyr|GUA|Ascaris             AAAAGAU......UA.GUUUA.UU-..AUU..AAAAUG.UUAGAUUGUAAAUCUAAAG-------------------.---------..AA.....UUU---U..UUCU.UU...UG
+#=GR mtdbD00031156|Tyr|GUA|Ascaris     PP *******......**.*****.99...669..******.******************9...............................99.....883...4..8999.**...**
+mtdbD00031157|Leu2|UAA|Ascaris            GUUGUUA......UA.GCAUA.AG-..--A..AGUGCA.UUUGUUUUAAGCGUAAAA--------------------.---------..GA.....UA-----ugGGAC.AA...CU
+#=GR mtdbD00031157|Leu2|UAA|Ascaris    PP *******......**.****9.76.....9..******.******************................................67.....66.....246***.**...**
+mtdbD00031158|Ile|GAU|Ascaris             AUUAUUU......UA.GUAAA.AUU.u--U..AUUAUG.UCGUCUUGAUAAGGCGGAG-------------------.------UUC..UU.....UUUG---..AAAU.AA...UA
+#=GR mtdbD00031158|Ile|GAU|Ascaris     PP *******......**.*****.***.9..9..******.******************8..........................899..99.....9944.....****.**...**
+mtdbD00031159|Phe|GAA|Ascaris             ACUCUGU......UA.GUUUAuGUU.u--U..AAAAUA.UGACUUUGAAGAAGUUGGG-------------------.---------..AA.....AU----G..UUAGgAG...UG
+#=GR mtdbD00031159|Phe|GAA|Ascaris     PP **99886......8*.****9***9.9..9..******.*******************...............................**.....**....2..466649*...**
+mtdbD00031160|Cys|GCA|Ascaris             GAGUCUU......UA.GUAUA.UUU.u--U..AGUAUG.CUUAAUUGCAGAUUAGGUG-------------------.---------..GA.....UUUG---..UGGG.CU...UU
+#=GR mtdbD00031160|Cys|GCA|Ascaris     PP ******9......**.*****.***.9..9..******.*******************...............................**.....**54.....7***.**...**
+mtdbD00031162|Asp|GUC|Ascaris             AAAACUA......UA.GUAUA.AUUuu--U.uAUUAUA.CCUUAUUGUCGAUGGGGAG-------------------.---------..AA.....UUU---U..UAGU.UU...UA
+#=GR mtdbD00031162|Asp|GUC|Ascaris     PP *******......**.*****.***96..5.8******.******************9...............................99.....984...5..****.**...**
+mtdbD00031163|Gly|UCC|Ascaris             GAUCUUU......UA.GUAUA.UUU..--U..UGUACA.UUUGACUUCCAAUCAGAUA-------------------.---------..GU.....UU----U..AAAG.GU...UA
+#=GR mtdbD00031163|Gly|UCC|Ascaris     PP *******......**.*****.**9....8..9*****.******************4...............................22.....33....3..****.**...**
+mtdbD00031164|His|GUG|Ascaris             AGCUUUG......UA.GUUUA.---..UGU.gAAAAUG.CUUGUUUGUGAUAUGAGUG-------------------.---------..AA.....AU-----..UGGA.GC...UU
+#=GR mtdbD00031164|His|GUG|Ascaris     PP *******......**.****8......445.5******.****99999999*******...............................**.....**.......****.**...**
+mtdbD00031165|Ala|UGC|Ascaris             GGGGCUG......UA.UUUUA.AGU.u--U..AAAAUA.UGCGCUUUGCAAGCGGAU--------------------.---------..GA.....UU----C..UGGC.UC...UA
+#=GR mtdbD00031165|Ala|UGC|Ascaris     PP *******......**.99988.887.7..8..******.******************................................9*.....99....7..9***.**...**
+mtdbD00039778|Asn|GUU|Habronattus         U------......-A.GAUAA.GG-..AGCugAUAGCGuUUUCAUUGUUAAUGAAAUG-------------------aAG-----UA..GAggggc-------..UGUA.--acuAG
+#=GR mtdbD00039778|Asn|GUU|Habronattus PP 8.............8.88888.88...4444888889835689**************6...................333.....66..7744422.........2222...23688
+mtdbD00039780|His|GUG|Habronattus         ------AucuaacUA.GUUUA.AU-..---..AAAACA.AUAGUUUGUGGAACUAUA--------AUU---------.-------UCuaAA.....AU----C..----.--...--
+#=GR mtdbD00039780|His|GUG|Habronattus PP ......89*******.*****.**........******.******************........666.................666677.....77....4..............
+mtdbD00039781|Pro|UGG|Habronattus         U---AAU......UA.AUUUA.AC-..--A..AAAAUA.UCUACUUUGGAUGUAGAA--------------------.---------..AA.....UCUAUAC..AUU-.--...AA
+#=GR mtdbD00039781|Pro|UGG|Habronattus PP *...677......99.99999.99.....9..******.******************................................99.....9988888..776.......**
+mtdbD00039782|Thr|UGU|Habronattus         GGUUGAU......UA.GUUUA.AG-..--U..AAAACA.GAAGUUUUGUAAAUUUCA--------------------.-AA----UC..UA.....AU-----..AUAA.GA...UU
+#=GR mtdbD00039782|Thr|UGU|Habronattus PP *88889*......**.****9.66.....9..******.******************......................33....99..99.....99.......9999.99...99
+#=GC SS_cons                              (((((((......,,.<<<<_.___..___.._>>>>,.<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<___..__.....__>>>>>..)))).))...):
+#=GC RF                                   =======......++.====+.+++..+++..+====+.=====++***++=====++=======++++=======+.+=====+++..++.....++=====..====.==...=+
+//
+
+==> aln_both_armless_mature.sto <==
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+NC_008640.1:3203-3266|Romanomermis_culicivorax|Ile|GAU         --CUUAAUA--------GAGAACAAUUUAAAUUGAUAAUUUAAA--------------------------UUAAAAU-----UUAAGacca---
+#=GR NC_008640.1:3203-3266|Romanomermis_culicivorax|Ile|GAU PP ..7******........88888889*******************..........................6******.....****97777...
+#=GC SS_cons                                                   (((((((,,<<<<________>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,,<<<<<_______>>>>>)))))....)):
+#=GC RF                                                        =======++====++++++++====+=====++***++=====++=======++++=======++=====+++++++==========....==+
+//
+
+==> aln_canonical36_qutrna_flags.sto <==
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00063498|Phe|GAA|Homo                 DE sapiens
+#=GS mtdbD00063499|Val|UAC|Homo                 DE sapiens
+#=GS mtdbD00063500|Leu2|UAA|Homo                DE sapiens
+#=GS mtdbD00063501|Ile|GAU|Homo                 DE sapiens
+#=GS mtdbD00063502|Gln|UUG|Homo                 DE sapiens
+#=GS mtdbD00063503|Met|CAU|Homo                 DE sapiens
+#=GS mtdbD00063504|Trp|UCA|Homo                 DE sapiens
+#=GS mtdbD00063505|Ala|UGC|Homo                 DE sapiens
+#=GS mtdbD00063506|Asn|GUU|Homo                 DE sapiens
+#=GS mtdbD00063507|Cys|GCA|Homo                 DE sapiens
+#=GS mtdbD00063508|Tyr|GUA|Homo                 DE sapiens
+#=GS mtdbD00063509|Ser2|UGA|Homo                DE sapiens
+#=GS mtdbD00063510|Asp|GUC|Homo                 DE sapiens
+#=GS mtdbD00063511|Lys|UUU|Homo                 DE sapiens
+#=GS mtdbD00063512|Gly|UCC|Homo                 DE sapiens
+#=GS mtdbD00063513|Arg|UCG|Homo                 DE sapiens
+#=GS mtdbD00063514|His|GUG|Homo                 DE sapiens
+#=GS mtdbD00063516|Leu1|UAG|Homo                DE sapiens
+#=GS mtdbD00063517|Glu|UUC|Homo                 DE sapiens
+#=GS mtdbD00063518|Thr|UGU|Homo                 DE sapiens
+#=GS mtdbD00063519|Pro|UGG|Homo                 DE sapiens
+#=GS mtdbD00125563|Glu|UUC|Saccharomyces        DE cerevisiae
+#=GS mtdbD00125564|His|GUG|Saccharomyces        DE cerevisiae
+#=GS mtdbD00125565|Lys|UUU|Saccharomyces        DE cerevisiae
+#=GS mtdbD00125566|Tyr|GUA|Saccharomyces        DE cerevisiae
+#=GS mtdbD00339284|Lys|UUU|Schizosaccharomyces  DE pombe
+#=GS mtdbD00339285|Ser1|GCU|Schizosaccharomyces DE pombe
+#=GS mtdbD00339286|Asn|GUU|Schizosaccharomyces  DE pombe
+#=GS mtdbD00339287|Thr|UGU|Schizosaccharomyces  DE pombe
+#=GS mtdbD00339288|Phe|GAA|Schizosaccharomyces  DE pombe
+#=GS mtdbD00339289|Leu1|UAG|Schizosaccharomyces DE pombe
+#=GS mtdbD00339290|Leu2|UAG|Schizosaccharomyces DE pombe
+#=GS mtdbD00339291|His|GUG|Schizosaccharomyces  DE pombe
+#=GS mtdbD00339292|Ile|GAU|Schizosaccharomyces  DE pombe
+#=GS mtdbD00339293|Val|UAC|Schizosaccharomyces  DE pombe
+#=GS mtdbD00339294|Ala|UGC|Schizosaccharomyces  DE pombe
+
+mtdbD00063498|Phe|GAA|Homo                         GUUUAUGU.AG.CUUA..CCUcc--U.cAAAGC.AAUACACUGAAAAUGUUUA---.--------------.--GaCGG.-.-G.C.U.CA.C....AU.CACC.CCAUAAACA
+#=GR mtdbD00063498|Phe|GAA|Homo                 PP ********.**.****..***99..9.******.*******************.....................77*88....5.6.*.**.8....88.78**.*********
+mtdbD00063499|Val|UAC|Homo                         CAGAGUGU.AG.CUUA..AC-..--A.cAAAGC.ACCCAACUUACACUUAGGAG--.--------------.---aU--.-.--.U.U.CA.AcuuaAC.UUGA.CCGCUCUGA
+#=GR mtdbD00063499|Val|UAC|Homo                 PP ********.**.****..**.....6.6*****.*******************6.....................45........6.*.**.*888766.6778.8********
+mtdbD00063500|Leu2|UAA|Homo                        GUUAAGAU.GG.CAGA..GCC.cGGU.aAUCGC.AUAAAACUUAAAACUUUACA--.--------------.--GuCAG.A.GG.U.U.CA.A....UU.CCUC.UUCUUAACA
+#=GR mtdbD00063500|Leu2|UAA|Homo                PP ********.**.****..**9.9***.7778**.********************....................*****.*.**.*.*.**.*....**.****.*********
+mtdbD00063501|Ile|GAU|Homo                         AGAAAUAU.GU.CU--..---..GAU.aAAAGA.GUUACUUUGAUAGAGUAAAU--.--------------.--AaUAG.G.AG.C.U.UA.A....AC.CCCC.UUAUUUCUA
+#=GR mtdbD00063501|Ile|GAU|Homo                 PP ********.**.*9.........558.799***.*****99999999*******....................*****.*.**.*.*.**.*....**.****.*********
+mtdbD00063502|Gln|UUG|Homo                         UAGGAUGG.GG.UGUG..AUA..GGU..GGCAC.GGAGAAUUUUGGAUUCUCAG--.--------------.--G.GAU.G.GG.U.U.CG.A....UU.CUCA.UAGUCCUAG
+#=GR mtdbD00063502|Gln|UUG|Homo                 PP ********.**.****..***..***..9****.*******************8....................8.***.*.**.*.*.**.*....**.****.*********
+mtdbD00063503|Met|CAU|Homo                         AGUAAGGUcAG.CUAA..AU-..---..-AAGCuAUCGGGCCCAUACCCCGAA---.--------------.--AaUGU.U.GG.U.U.-A.U....AC.CCUU.CCCGUACUA
+#=GR mtdbD00063503|Met|CAU|Homo                 PP **999999777.7777..77.........777647******************.....................99***.*.**.9.8..6.6....78.8999.99999****
+mtdbD00063504|Trp|UCA|Homo                         AGAAAUUU.AG.GUUA..AAU.a--C..AGACC.AAGAGCCUUCAAAGCCCUCA--.--------------.---.-GU.A.AG.U.UgCA.A....UA.CUU-.-AAUUUCUG
+#=GR mtdbD00063504|Trp|UCA|Homo                 PP ********.**.****..**9.8..7..*****.***************99998.......................88.9.99.*.****.*....**.999...********
+mtdbD00063505|Ala|UGC|Homo                         AAGGGCUU.AG.CUUA..AU-..--U..AAAGU.GGCUGAUUUGCGUUCAGUU---.--------------.--GaUGC.AgAG.-.U.GG.G....GUu-UUG.CAGUCCUUA
+#=GR mtdbD00063505|Ala|UGC|Homo                 PP ********.**.****..**.....9..9****.*******************.....................88***.*555...8.88.8....9*5.***.*********
+mtdbD00063506|Asn|GUU|Homo                         UAGAUUGA.AG.C-CA..GUU..GAU.uAGGGU.GCUUAGCUGUUAACUAAGUG--.--------------.--UuUGU.G.GG.U.U.UA.A....GU.CCCA.UUGGUCUAG
+#=GR mtdbD00063506|Asn|GUU|Homo                 PP *******9.99.9.9*..***..***.******.*******************9....................9****.*.**.*.*.**.*....**.****.*********
+mtdbD00063507|Cys|GCA|Homo                         AGCUCCGA.GGu----.gAUU.u--U.cA---U.AUUGAAUUGCAAAUUCGAA---.--------------.--GaAGC.A.GC.U.U.CA.A....AC.-CUG.CCGGGGCUU
+#=GR mtdbD00063507|Cys|GCA|Homo                 PP ********.*84.....8888.8..8.88...*.*******************.....................88***.*.**.*.*.**.*....**..***.*********
+mtdbD00063508|Tyr|GUA|Homo                         GGUAAAAU.GG.CUGA..GUG..---..-AAGC.AUUGGACUGUAAAUCUAAA---.--------------.--GaCAG.G.GG.U.U.AGg-....--.CCUC.UUUUUACCA
+#=GR mtdbD00063508|Tyr|GUA|Homo                 PP ********.**.****..**6........****.*******************.....................88***.*.**.*.9.775........****.*********
+mtdbD00063509|Ser2|UGA|Homo                        GAAAAAGUcA-.----ugGA-..GGC.cAUG-G.GGUUGGCUUGAAACCAGCU---.--------------.--UuGGG.G.GG.U.U.CG.A....UU.CCUU.CCUUUUUUG
+#=GR mtdbD00063509|Ser2|UGA|Homo                PP ********77......6799...***.9965.5.*******************.....................889**.*.**.*.*.**.*....**.****.*********
+mtdbD00063510|Asp|GUC|Homo                         AAGGUAUU.AG.AAAA..ACC..---..AUUUC.AUAACUUUGUCAAAGUUAA---.--------------.--AuUAU.A.GGcU.-.-A.A....AU.CCUA.UAUAUCUUA
+#=GR mtdbD00063510|Asp|GUC|Homo                 PP ********.**.****..**7.......7999*.*******************.....................*****.*.**66....8.8....88.****.*********
+mtdbD00063511|Lys|UUU|Homo                         CACUGUAA.AG.CUAA..CU-..---..-UAGC.AUUAACCUUUUAAGUUAAAG--.--------------.--AuUAA.G.AG.AaC.CA.A...cAC.CUCU.UUACAGUGA
+#=GR mtdbD00063511|Lys|UUU|Homo                 PP ********.**.*966..66.........66**.********************....................*****.*.**.735.67.7...779.****.*********
+mtdbD00063512|Gly|UCC|Homo                         ACUCUUUU.AG.UAUA..AA-..--U..AGUAC.CGUUAACUUCCAAUUAACUA--.--------------.--G.UUU.U.G-.-.A.CA.A....CAuUCAA.AAAAGAGUA
+#=GR mtdbD00063512|Gly|UCC|Homo                 PP ********.**.****..**.....8..9****.*****************995....................6.555.5.5....3.47.7....4453556.89*******
+mtdbD00063513|Arg|UCG|Homo                         UGGUAUAU.AG.UUUA..AAC..---..AAAAC.GAAUGAUUUCGACUCAUUA---.--------------.--AaUUA.U.GA.U.-.--.-....AA.UCAU.AUUUACCAA
+#=GR mtdbD00063513|Arg|UCG|Homo                 PP ********.**.****..**6.......8****.*******************.....................88999.9.88.7...........66.6899.9********
+mtdbD00063514|His|GUG|Homo                         GUAAAUAU.AG.UUUA..ACC..---..AAAAC.AUCAGAUUGUGAAUCUGAC---.--------------.--AaCAG.A.GG.C.U.UA.C....GA.CCCC.UUAUUUACC
+#=GR mtdbD00063514|His|GUG|Homo                 PP ********.**.****..**6.......7****.*******************.....................99***.*.**.7.7.66.6....66.6667.8********
+mtdbD00063516|Leu1|UAG|Homo                        ACUUUUAA.AG.GAUA..AC-..AGC..UAUCC.AUUGGUCUUAGGCCCCAAA---.--------------.--AaUUU.U.GG.U.G.CA.A....CU.CCAA.AUAAAAGUA
+#=GR mtdbD00063516|Leu1|UAG|Homo                PP ********.**.****..**...***..*****.*******************.....................99***.*.**.*.*.**.*....**.****.*********
+mtdbD00063517|Glu|UUC|Homo                         GUUCUUGU.AG.UUGA..AA-..--U..ACAAC.GAUGGUUUUUCAUAUCAUUG--.--------------.--G.UCG.U.GG.U.U.GU.A....GU.CCGU.GCGAGAAUA
+#=GR mtdbD00063517|Glu|UUC|Homo                 PP ********.**.****..**.....9..9****.*******************7....................7.***.*.**.*.*.**.*....**.****.*********
+mtdbD00063518|Thr|UGU|Homo                         GUCCUUGU.AG.UAUA..AAC..--U..AAUAC.ACCAGUCUUGUAAACCGGA---.--------------.--GaUGA.A.--.-.-.-A.A....CC.UUUUuCCAAGGACA
+#=GR mtdbD00063518|Thr|UGU|Homo                 PP ********.**.****..***....9..*****.*******************.....................77**9.9.........6.7....76.54444*********
+mtdbD00063519|Pro|UGG|Homo                         CAGAGAAU.AG.UUUA..AAU..--U..AGAAU.CUUAGCUUUGGGUGCUAAUG--.--------------.--G.UGG.A.GU.-.U.AA.A....GA.-CUU.UUUCUCUGA
+#=GR mtdbD00063519|Pro|UGG|Homo                 PP ********.**.****..**9....8..*****.*******************8....................8.998.7.76...6.66.6....65..778.*********
+mtdbD00125563|Glu|UUC|Saccharomyces                GACCUUAU.CG.UCUA..AU-..GGU.uACGAC.AUCACCUCUUCAUGUUGAU---.--------------.--AaUAU.C.GG.U.U.CG.A....UU.CCGA.UUAAGGUUA
+#=GR mtdbD00125563|Glu|UUC|Saccharomyces        PP ********.**.****..**...***.******.*******************.....................99***.*.**.*.*.**.*....**.****.*********
+mtdbD00125564|His|GUG|Saccharomyces                GUGAAUAU.AU.UUCA..AU-..GGU..AGAAA.AUACGCUUGUGGUGCGUUA---.--------------.--AaUCU.G.AG.U.U.CG.A....UU.CUCA.GUAUUCACC
+#=GR mtdbD00125564|His|GUG|Saccharomyces        PP ********.**.****..**...***..*****.****************877.....................77***.*.**.*.*.**.*....**.****.*********
+mtdbD00125565|Lys|UUU|Saccharomyces                GAGAAUAU.UG.UUUA..AU-..GGU..AAAAC.AGUUGUCUUUUAAGCAACCC--.--------------.--A.UGCuU.GG.U.U.CA.A....CU.CCAG.CUAUUCUCA
+#=GR mtdbD00125565|Lys|UUU|Saccharomyces        PP ********.**.****..**...***..*****.*******************8....................8.99945.**.*.*.**.*....**.****.*********
+mtdbD00125566|Tyr|GUA|Saccharomyces                GGAGGGAU.UU.UCAA.uGUU..GGUagUUGGA.GUUGAGCUGUAAACUCAAU-GA.C----UUAG----G.UCUuCAU.A.GG.U.U.CA.A....UU.CCUA.UUCCCUUCA
+#=GR mtdbD00125566|Tyr|GUA|Saccharomyces        PP ********.*9.9998.****..**********.*******************.88.8....6666....8.8889***.*.**.*.*.**.*....**.****.*********
+mtdbD00339284|Lys|UUU|Schizosaccharomyces          GGGGAUGU.AG.CUCA..AU-..GGU.uAGAGC.UUUCGCCUUUUAAGCGAUAG--.--------------.--GaUAA.G.GG.U.U.CA.A....AU.CCCU.UCAGACCCA
+#=GR mtdbD00339284|Lys|UUU|Schizosaccharomyces  PP ***6666*.**.****..**...***.******.********************....................*****.*.**.*.*.**.*....**.****.*********
+mtdbD00339285|Ser1|GCU|Schizosaccharomyces         GGAAAAAUaGU.UCUA..AUU..GGU..AAGAA.GGAUACUUGCUACGUAUCUGGUg-----------AAUaACCuUGU.G.AG.U.U.CG.A....GU.CUCA.CUUUUUCCG
+#=GR mtdbD00339285|Ser1|GCU|Schizosaccharomyces PP ********66*.****..***..***..*****.*******************7775...........33657777***.*.**.*.*.**.*....**.****.*********
+mtdbD00339286|Asn|GUU|Schizosaccharomyces          GUUGUUGU.AG.CUCA..AU-..GGU..AGAGC.AAGUCACUGUUAAUGACCU---.--------------.--GaUAG.U.GG.U.U.CG.A....UU.CCAC.UCAAUAACG
+#=GR mtdbD00339286|Asn|GUU|Schizosaccharomyces  PP ********.**.****..**...***..*****.*****************8*.....................88***.*.**.*.*.**.*....**.****.*********
+mtdbD00339287|Thr|UGU|Schizosaccharomyces          GCUAAUUU.AA.CUCA..AUU..GGU..AGAGU.GCGUACCUUGUAAGUACGAA--.--------------.--GuUAG.A.GG.U.U.CA.A....UU.CCUC.UAAUUAGCA
+#=GR mtdbD00339287|Thr|UGU|Schizosaccharomyces  PP ********.**.****..***..***..*****.********************....................*****.*.**.*.*.**.*....**.****.*********
+mtdbD00339288|Phe|GAA|Schizosaccharomyces          GCUCUGAU.AA.CUUA..AC-..GGU.uAAAGU.GCAGUAUUGAAGCUGCUGA---.--------------.--GaUAU.U.GG.U.U.CG.A....UU.CCAU.UUCAGAGCA
+#=GR mtdbD00339288|Phe|GAA|Schizosaccharomyces  PP ********.**.****..**...***.******.*******************.....................88***.*.**.*.*.**.*....**.****.*********
+mtdbD00339289|Leu1|UAG|Schizosaccharomyces         GCAGAUGU.GA.UGAA..AUU..GGU.aAACAU.GUUUACCUUAGGAGUAAAA---.-----UCU------.---.UGA.A.GG.U.U.CG.A....AU.CCUU.CCAUCUGUA
+#=GR mtdbD00339289|Leu1|UAG|Schizosaccharomyces PP ********.**.****..***..***.******.*******************.........666...........***.*.**.*.*.**.*....**.****.*********
+mtdbD00339290|Leu2|UAG|Schizosaccharomyces         GCAGAUGU.GA.UGAA..AUU..GGU.aAACAU.GUUUACCUUAGGAGUAAAA---.-----UCU------.---.UGA.A.GG.U.U.CG.A....AU.CCUU.CCAUCUGUA
+#=GR mtdbD00339290|Leu2|UAG|Schizosaccharomyces PP ********.**.****..***..***.******.*******************.........666...........***.*.**.*.*.**.*....**.****.*********
+mtdbD00339291|His|GUG|Schizosaccharomyces          GUGAUUGU.AA.UUCA..AU-..GGU..AGAAU.GCUUAUUUGUGGCAUAAGAA--.--------------.--GuUCU.U.GG.U.U.CG.A....UU.CCAA.GUAAUCACC
+#=GR mtdbD00339291|His|GUG|Schizosaccharomyces  PP ********.**.****..**...***..*****.********************....................*****.*.**.*.*.**.*....**.****.*********
+mtdbD00339292|Ile|GAU|Schizosaccharomyces          AGUUCUUU.AA.CUUA..AAA..GGU.cAGAGU.GCAGACUUGAUAAGUCUGUG--.--------------.--G.UAU.U.GG.U.U.CG.A....UU.CCAA.UAAGAACUA
+#=GR mtdbD00339292|Ile|GAU|Schizosaccharomyces  PP ********.**.****..999..***.******.*******************8....................8.***.*.**.*.*.**.*....**.****.*********
+mtdbD00339293|Val|UAC|Schizosaccharomyces          AGGAGAAU.AG.CUUA..AUU..GGU..AGAGC.ACUUACCUUACAAGUAAGAU--.--------------.--UaUAA.G.GG.U.U.CA.A....AU.CCCU.UUUCUCCUA
+#=GR mtdbD00339293|Val|UAC|Schizosaccharomyces  PP ********.**.****..***..***..*****.*******************6....................67***.*.**.*.*.**.*....**.****.*********
+mtdbD00339294|Ala|UGC|Schizosaccharomyces          GGGGAUUU.AA.UUUA..AUU..GGU.uAGAAU.AUUGUGUUUGCACCACAAA---.--------------.--AaUCU.G.GU.U.U.CG.A....GU.ACCA.GAAUCUCCA
+#=GR mtdbD00339294|Ala|UGC|Schizosaccharomyces  PP ********.**.****..***..***.******.*******************.....................99***.*.**.*.*.**.*....**.9***.*********
+#=GC SS_cons                                       (((((((,.,<.<<<_..___..___.._>>>>.,<<<<<_______>>>>>,,<<.<<<<<____>>>>>.>>,.,<<.<.<<._._.__._....__.>>>>.>))))))):
+#=GC RF                                            =======+.+=.===+..+++..+++..+====.+=====++***++=====++==.=====++++=====.==+.+==.=.==.+.+.++.+....++.====.========+
+//

@@ -1,0 +1,819 @@
+  not an armless CM by naming convention, skipping for routing: data/truncated_cm/armless_trnF_wo_d_and_t.cm
+  not an armless CM by naming convention, skipping for routing: data/truncated_cm/armless_trnI_wo_d_and_t.cm
+  not an armless CM by naming convention, skipping for routing: data/truncated_cm/armless_trnL1_wo_d_and_t.cm
+  not an armless CM by naming convention, skipping for routing: data/truncated_cm/armless_trnT_wo_d_and_t.cm
+  not an armless CM by naming convention, skipping for routing: data/truncated_cm/armless_trnY_wo_d_and_t.cm
+  not an armless CM by naming convention, skipping for routing: data/truncated_cm/armless_trnN_wo_d_and_t.cm
+  not an armless CM by naming convention, skipping for routing: data/truncated_cm/armless_trnM_wo_d_and_t.cm
+  not an armless CM by naming convention, skipping for routing: data/truncated_cm/armless_trnG_wo_d_and_t.cm
+  not an armless CM by naming convention, skipping for routing: data/truncated_cm/armless_trnP_wo_d_and_t.cm
+  not an armless CM by naming convention, skipping for routing: data/truncated_cm/armless_trnH_wo_d_and_t.cm
+  not an armless CM by naming convention, skipping for routing: data/truncated_cm/armless_trnS2_wo_d_and_t.cm
+  not an armless CM by naming convention, skipping for routing: data/truncated_cm/armless_trnD_wo_d_and_t.cm
+  not an armless CM by naming convention, skipping for routing: data/truncated_cm/armless_trnV_wo_d_and_t.cm
+  not an armless CM by naming convention, skipping for routing: data/truncated_cm/armless_trnL2_wo_d_and_t.cm
+  not an armless CM by naming convention, skipping for routing: data/truncated_cm/armless_trnQ_wo_d_and_t.cm
+  not an armless CM by naming convention, skipping for routing: data/truncated_cm/armless_trnE_wo_d_and_t.cm
+  not an armless CM by naming convention, skipping for routing: data/truncated_cm/armless_trnR_wo_d_and_t.cm
+  not an armless CM by naming convention, skipping for routing: data/truncated_cm/armless_trnK_wo_d_and_t.cm
+  not an armless CM by naming convention, skipping for routing: data/truncated_cm/armless_trnW_wo_d_and_t.cm
+  not an armless CM by naming convention, skipping for routing: data/truncated_cm/armless_trnA_wo_d_and_t.cm
+  not an armless CM by naming convention, skipping for routing: data/truncated_cm/armless_trnS1_wo_d_and_t.cm
+  not an armless CM by naming convention, skipping for routing: data/truncated_cm/armless_trnC_wo_d_and_t.cm
+indexed 44 armless CMs: ['A/d', 'A/t', 'C/d', 'C/t', 'D/d', 'D/t', 'E/d', 'E/t', 'F/d', 'F/t', 'G/d', 'G/t', 'H/d', 'H/t', 'I/d', 'I/t', 'K/d', 'K/t', 'L1/d', 'L1/t', 'L2/d', 'L2/t', 'M/d', 'M/t', 'N/d', 'N/t', 'P/d', 'P/t', 'Q/d', 'Q/t', 'R/d', 'R/t', 'S1/d', 'S1/t', 'S2/d', 'S2/t', 'T/d', 'T/t', 'V/d', 'V/t', 'W/d', 'W/t', 'Y/d', 'Y/t']
+36 sequences, canonical CM: data/TRNAinf-euk.cm, 44 armless CMs available for rerouting, 4 worker process(es)
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmpnvcyo_qr.fa
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmp230iqnis.fa
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmpblnnq0wk.fa
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmpy0azs39r.fa
+mtdbD00063507|Cys|GCA|Homo sapiens
+  seq (66nt): AGCUCCGAGGUGAUUUUCAUAUUGAAUUGCAAAUUCGAAGAAGCAGCUUCAAACCUGCCGGGGCUU
+  ss  (66nt):  .((((((..(.........).(((((.......)))))....(((((.......))))))))))).
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=1 n_compatible=1 p_value=0.375
+    stem[1]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00063507|Cys|GCA|Homo DE sapiens
+
+mtdbD00063507|Cys|GCA|Homo         AGCUCCGAGGu----gAUUu--UcA---UAUUGAAUUGCAAAUUCGAA-------------------GaAGCAGCUUCAAAC-CUGCCGGGGCUU
+#=GR mtdbD00063507|Cys|GCA|Homo PP *********84....88888..888...********************...................88*************.************
+#=GC SS_cons                       (((((((,,<.<<<_.___.___._>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<_______>>>>>))))))):
+#=GC RF                            =======++=.===+.+++.+++.+====+=====++***++=====++=======++++=======+.+=====+++++++============+
+//
+
+mtdbD00063507|Cys|GCA|Homo sapiens: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmpu9pcjssj.fa
+mtdbD00063504|Trp|UCA|Homo sapiens
+  seq (68nt): AGAAAUUUAGGUUAAAUACAGACCAAGAGCCUUCAAAGCCCUCAGUAAGUUGCAAUACUUAAUUUCUG
+  ss  (68nt):  ..(((((..((((.......)))).(((((.......)))))..(((((........)))))))))).
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+    stem[1]: n_pairs=5 n_compatible=4 p_value=0.0692138671875
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=3 n_compatible=3 p_value=0.052734375
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00063504|Trp|UCA|Homo DE sapiens
+
+mtdbD00063504|Trp|UCA|Homo         AGAAAUUUAGGUUAAAUa--CAGACCAAGAGCCUUCAAAGCCCUCA--------------------GUAAGUUgCAAUACUU--AAUUUCUG
+#=GR mtdbD00063504|Trp|UCA|Homo PP ****************98..7********************99998....................88999********999..********
+#=GC SS_cons                       (((((((,,<<<<____.____>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,,<<<<<__._____>>>>>))))))):
+#=GC RF                            =======++====++++.++++====+=====++***++=====++=======++++=======++=====++.+++++============+
+//
+
+mtdbD00063504|Trp|UCA|Homo sapiens: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmpstpbimd_.fa
+mtdbD00063501|Ile|GAU|Homo sapiens
+  seq (69nt): AGAAAUAUGUCUGAUAAAAGAGUUACUUUGAUAGAGUAAAUAAUAGGAGCUUAAACCCCCUUAUUUCUA
+  ss  (69nt):  (((((((..(((.....)))).(((((.......))))).....(((((.......)))))))))))..
+  arm-loss diagnosis: UNANCHORED_fallback_structurally_absent=[2]  (anticodon anchor: ambiguous_2_loop_matches, register_offset=None)
+    stem[0]: n_pairs=3 n_compatible=3 p_value=0.052734375
+    stem[1]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=5 n_compatible=4 p_value=0.0692138671875
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00063501|Ile|GAU|Homo DE sapiens
+
+mtdbD00063501|Ile|GAU|Homo         AGAAAUAUGUCU-----GAUaAAAGAGUUACUUUGAUAGAGUAAAU------------------AaUAGGAGCUUAAACCCCCUUAUUUCUA
+#=GR mtdbD00063501|Ile|GAU|Homo PP ***********9.....558799********99999999*******..................****************************
+#=GC SS_cons                       (((((((,,<<<<_______._>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<_______>>>>>))))))):
+#=GC RF                            =======++====+++++++.+====+=====++***++=====++=======++++=======+.+=====+++++++============+
+//
+
+mtdbD00063501|Ile|GAU|Homo sapiens: CM:TRNAinf-euk.cm  [UNANCHORED_fallback_structurally_absent=[2]]
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmptexe4dvq.fa
+mtdbD00063498|Phe|GAA|Homo sapiens
+  seq (71nt): GUUUAUGUAGCUUACCUCCUCAAAGCAAUACACUGAAAAUGUUUAGACGGGCUCACAUCACCCCAUAAACA
+  ss  (71nt):  (((((((..((((.........)))).(((((.......)))))....(((.......))))))))))...
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+    stem[1]: n_pairs=5 n_compatible=4 p_value=0.0692138671875
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=3 n_compatible=3 p_value=0.052734375
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00063498|Phe|GAA|Homo DE sapiens
+
+mtdbD00063498|Phe|GAA|Homo         GUUUAUGUAGCUUACCUcc--UcAAAGCAAUACACUGAAAAUGUUUA-------------------GaCGG--GCUCACAUCACCCCAUAAACA
+#=GR mtdbD00063498|Phe|GAA|Homo PP *****************99..9*************************...................77*88..56***88878***********
+#=GC SS_cons                       (((((((,,<<<<____..___._>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<_______>>>>>))))))):
+#=GC RF                            =======++====++++..+++.+====+=====++***++=====++=======++++=======+.+=====+++++++============+
+//
+
+mtdbD00063498|Phe|GAA|Homo sapiens: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+mtdbD00063508|Tyr|GUA|Homo sapiens
+  seq (66nt): GGUAAAAUGGCUGAGUGAAGCAUUGGACUGUAAAUCUAAAGACAGGGGUUAGGCCUCUUUUUACCA
+  ss  (66nt):  (((((((..((((....)))).(((((.......)))))....(((((.....)))))))))))).
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=3 p_value=0.151611328125
+    stem[1]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00063508|Tyr|GUA|Homo DE sapiens
+
+mtdbD00063508|Tyr|GUA|Homo         GGUAAAAUGGCUGAGUG----AAGCAUUGGACUGUAAAUCUAAA-------------------GaCAGGGGUUAGg---CCUCUUUUUACCA
+#=GR mtdbD00063508|Tyr|GUA|Homo PP ****************6....***********************...................88*******9775...*************
+#=GC SS_cons                       (((((((,,<<<<________>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<____.___>>>>>))))))):
+#=GC RF                            =======++====++++++++====+=====++***++=====++=======++++=======+.+=====++++.+++============+
+//
+
+mtdbD00063508|Tyr|GUA|Homo sapiens: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmp3yy295vr.fa
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmp9qe69f44.fa
+mtdbD00063505|Ala|UGC|Homo sapiens
+  seq (69nt): AAGGGCUUAGCUUAAUUAAAGUGGCUGAUUUGCGUUCAGUUGAUGCAGAGUGGGGUUUUGCAGUCCUUA
+  ss  (69nt):  .((((((..((((.....)))).(((((.......)))))....(((.((.......))))))))))).
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+    stem[1]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00063505|Ala|UGC|Homo DE sapiens
+
+mtdbD00063505|Ala|UGC|Homo         AAGGGCUUAGCUUAAU---UAAAGUGGCUGAUUUGCGUUCAGUU-------------------GaUGCAgAG-UGGGGUu-UUGCAGUCCUUA
+#=GR mtdbD00063505|Ala|UGC|Homo PP ****************...99***********************...................88****555.88889*5.************
+#=GC SS_cons                       (((((((,,<<<<________>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<.<<_______.>>>>>))))))):
+#=GC RF                            =======++====++++++++====+=====++***++=====++=======++++=======+.+===.==+++++++.============+
+//
+
+mtdbD00063505|Ala|UGC|Homo sapiens: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmpepg28qa7.fa
+  $ cmalign --notrunc --nonbanded -g data/truncated_cm/armless_trnV_wo_t.cm /tmp/tmp93xx24b6.fa
+mtdbD00063509|Ser2|UGA|Homo sapiens
+  seq (69nt): GAAAAAGUCAUGGAGGCCAUGGGGUUGGCUUGAAACCAGCUUUGGGGGGUUCGAUUCCUUCCUUUUUUG
+  ss  (69nt):  (((((((............))).(((((.......)))))....(((((.......)))))))))....
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=0 n_compatible=0 p_value=None
+    stem[1]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00063509|Ser2|UGA|Homo DE sapiens
+
+mtdbD00063509|Ser2|UGA|Homo         GAAAAAGUcA-----ugGA-GGCcAUG-GGGUUGGCUUGAAACCAGCU-------------------UuGGGGGGUUCGAUUCCUUCCUUUUUUG
+#=GR mtdbD00063509|Ser2|UGA|Homo PP ********77.....6799.***9965.5*******************...................889*************************
+#=GC SS_cons                        (((((((,.,<<<<_..______._>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<_______>>>>>))))))):
+#=GC RF                             =======+.+====+..++++++.+====+=====++***++=====++=======++++=======+.+=====+++++++============+
+//
+
+mtdbD00063502|Gln|UUG|Homo sapiens
+mtdbD00063509|Ser2|UGA|Homo sapiens: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+  seq (72nt): UAGGAUGGGGUGUGAUAGGUGGCACGGAGAAUUUUGGAUUCUCAGGGAUGGGUUCGAUUCUCAUAGUCCUAG
+  ss  (72nt):  (((((((..((((........)))).(((((.......)))))....(((((.......)))))))))))).
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+    stem[1]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00063502|Gln|UUG|Homo DE sapiens
+
+mtdbD00063502|Gln|UUG|Homo         UAGGAUGGGGUGUGAUAGGUGGCACGGAGAAUUUUGGAUUCUCAG------------------GGAUGGGUUCGAUUCUCAUAGUCCUAG
+#=GR mtdbD00063502|Gln|UUG|Homo PP ********************9***********************8..................8**************************
+#=GC SS_cons                       (((((((,,<<<<________>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,,<<<<<_______>>>>>))))))):
+#=GC RF                            =======++====++++++++====+=====++***++=====++=======++++=======++=====+++++++============+
+//
+
+mtdbD00063502|Gln|UUG|Homo sapiens: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmplqbagekh.fa
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmpkppkflla.fa
+mtdbD00063499|Val|UAC|Homo sapiens
+  seq (69nt): CAGAGUGUAGCUUAACACAAAGCACCCAACUUACACUUAGGAGAUUUCAACUUAACUUGACCGCUCUGA
+  ss  (69nt):  (((((((..((((......)))).(((((.......)))))....................))))))).
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2, 3]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+    stem[1]: n_pairs=5 n_compatible=4 p_value=0.0692138671875
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=0 n_compatible=0 p_value=None
+  rerouted to armless CM: data/truncated_cm/armless_trnV_wo_t.cm
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00063499|Val|UAC|Homo DE sapiens
+
+mtdbD00063499|Val|UAC|Homo         CAGAGUGUAGCUUAACACAAAGCACCCAACUUACACUUAGGAGAUuuCAAcuuaacuugacCGCUCUGA
+#=GR mtdbD00063499|Val|UAC|Homo PP ******************9****************************9999999999999*********
+#=GC SS_cons                       (((((((,,<<<<______>>>>,<<<<<_______>>>>>,,,,..,,,...........))))))):
+#=GC RF                            CAAaaugUAGCUuAAauAaaAGCAUcUCaCUUACACuGAgAAGAU..CAA...........cauuUUGA
+//
+
+mtdbD00063499|Val|UAC|Homo sapiens: CM:armless_trnV_wo_t.cm [rerouted]  [T_OR_VAR_ARM_MISSING_slots=[2, 3]]
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmpcei2_vtv.fa
+mtdbD00063506|Asn|GUU|Homo sapiens
+  seq (73nt): UAGAUUGAAGCCAGUUGAUUAGGGUGCUUAGCUGUUAACUAAGUGUUUGUGGGUUUAAGUCCCAUUGGUCUAG
+  ss  (73nt):  (((((((..(((.........)))).(((((.......))))).....(((((.......)))))))))))..
+  arm-loss diagnosis: UNANCHORED_fallback_structurally_absent=[2]  (anticodon anchor: ambiguous_2_loop_matches, register_offset=None)
+    stem[0]: n_pairs=3 n_compatible=3 p_value=0.052734375
+    stem[1]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00063506|Asn|GUU|Homo DE sapiens
+
+mtdbD00063506|Asn|GUU|Homo         UAGAUUGAAGC-CAGUUGAUuAGGGUGCUUAGCUGUUAACUAAGUG------------------UuUGUGGGUUUAAGUCCCAUUGGUCUAG
+#=GR mtdbD00063506|Asn|GUU|Homo PP *******9999.9********************************9..................9***************************
+#=GC SS_cons                       (((((((,,<<<<_______._>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<_______>>>>>))))))):
+#=GC RF                            =======++====+++++++.+====+=====++***++=====++=======++++=======+.+=====+++++++============+
+//
+
+mtdbD00063506|Asn|GUU|Homo sapiens: CM:TRNAinf-euk.cm  [UNANCHORED_fallback_structurally_absent=[2]]
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmpzxub9g9s.fa
+mtdbD00063503|Met|CAU|Homo sapiens
+  seq (68nt): AGUAAGGUCAGCUAAAUAAGCUAUCGGGCCCAUACCCCGAAAAUGUUGGUUAUACCCUUCCCGUACUA
+  ss  (68nt):  (((((((...((((...))))..(((((.......)))))....(((((......)))))))))))).
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=3 p_value=0.151611328125
+    stem[1]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=5 n_compatible=3 p_value=0.27520751953125
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00063503|Met|CAU|Homo DE sapiens
+
+mtdbD00063503|Met|CAU|Homo         AGUAAGGUcAGCUAAAU-----AAGCuAUCGGGCCCAUACCCCGAA-------------------AaUGUUGGUU-AUACCCUUCCCGUACUA
+#=GR mtdbD00063503|Met|CAU|Homo PP **999999777777777.....777647******************...................99******98.6678899999999****
+#=GC SS_cons                       (((((((,.,<<<<________>>>>.,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<_______>>>>>))))))):
+#=GC RF                            =======+.+====++++++++====.+=====++***++=====++=======++++=======+.+=====+++++++============+
+//
+
+mtdbD00063503|Met|CAU|Homo sapiens: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmp23ab1fu1.fa
+mtdbD00063510|Asp|GUC|Homo sapiens
+  seq (68nt): AAGGUAUUAGAAAAACCAUUUCAUAACUUUGUCAAAGUUAAAUUAUAGGCUAAAUCCUAUAUAUCUUA
+  ss  (68nt):  (((((((..((((.....)))).(((((.......)))))....(((((......)))))))))))).
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+    stem[1]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00063510|Asp|GUC|Homo DE sapiens
+
+mtdbD00063510|Asp|GUC|Homo         AAGGUAUUAGAAAAACC---AUUUCAUAACUUUGUCAAAGUUAA-------------------AuUAUAGGcU--AAAUCCUAUAUAUCUUA
+#=GR mtdbD00063510|Asp|GUC|Homo PP ****************7...7999********************...................********66..8888*************
+#=GC SS_cons                       (((((((,,<<<<________>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<._______>>>>>))))))):
+#=GC RF                            =======++====++++++++====+=====++***++=====++=======++++=======+.+=====.+++++++============+
+//
+
+mtdbD00063510|Asp|GUC|Homo sapiens: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmpqadsm7ew.fa
+mtdbD00063513|Arg|UCG|Homo sapiens
+  seq (65nt): UGGUAUAUAGUUUAAACAAAACGAAUGAUUUCGACUCAUUAAAUUAUGAUAAUCAUAUUUACCAA
+  ss  (65nt):  (((((((..((((.....)))).(((((.......)))))....(((((...)))))))))))).
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+    stem[1]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00063513|Arg|UCG|Homo DE sapiens
+
+mtdbD00063513|Arg|UCG|Homo         UGGUAUAUAGUUUAAAC---AAAACGAAUGAUUUCGACUCAUUA-------------------AaUUAUGAU----AAUCAUAUUUACCAA
+#=GR mtdbD00063513|Arg|UCG|Homo PP ****************6...8***********************...................889999887....6668999********
+#=GC SS_cons                       (((((((,,<<<<________>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<_______>>>>>))))))):
+#=GC RF                            =======++====++++++++====+=====++***++=====++=======++++=======+.+=====+++++++============+
+//
+
+mtdbD00063513|Arg|UCG|Homo sapiens: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmprmvit6j0.fa
+mtdbD00063500|Leu2|UAA|Homo sapiens
+  seq (75nt): GUUAAGAUGGCAGAGCCCGGUAAUCGCAUAAAACUUAAAACUUUACAGUCAGAGGUUCAAUUCCUCUUCUUAACA
+  ss  (75nt):  (((((((..((((..........)))).(((((.......))))).....(((((.......)))))))))))).
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=3 p_value=0.151611328125
+    stem[1]: n_pairs=5 n_compatible=4 p_value=0.0692138671875
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00063500|Leu2|UAA|Homo DE sapiens
+
+mtdbD00063500|Leu2|UAA|Homo         GUUAAGAUGGCAGAGCCcGGUaAUCGCAUAAAACUUAAAACUUUACA------------------GuCAGAGGUUCAAUUCCUCUUCUUAACA
+#=GR mtdbD00063500|Leu2|UAA|Homo PP ****************99***7778**********************..................****************************
+#=GC SS_cons                        (((((((,,<<<<____.___._>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<_______>>>>>))))))):
+#=GC RF                             =======++====++++.+++.+====+=====++***++=====++=======++++=======+.+=====+++++++============+
+//
+
+mtdbD00063500|Leu2|UAA|Homo sapiens: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+mtdbD00063511|Lys|UUU|Homo sapiens
+  seq (70nt): CACUGUAAAGCUAACUUAGCAUUAACCUUUUAAGUUAAAGAUUAAGAGAACCAACACCUCUUUACAGUGA
+  ss  (70nt):  (((((((..((((...)))).(((((.......))))).....(((((.........)))))))))))).
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+    stem[1]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00063511|Lys|UUU|Homo DE sapiens
+
+mtdbD00063511|Lys|UUU|Homo         CACUGUAAAGCUAACU-----UAGCAUUAACCUUUUAAGUUAAAG------------------AuUAAGAGAaCCAAcACCUCUUUACAGUGA
+#=GR mtdbD00063511|Lys|UUU|Homo PP ***********96666.....66**********************..................********735677779*************
+#=GC SS_cons                       (((((((,,<<<<________>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<_.____.__>>>>>))))))):
+#=GC RF                            =======++====++++++++====+=====++***++=====++=======++++=======+.+=====+.++++.++============+
+//
+
+mtdbD00063511|Lys|UUU|Homo sapiens: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmp8osbmvep.fa
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmp4foyh025.fa
+mtdbD00063517|Glu|UUC|Homo sapiens
+  seq (69nt): GUUCUUGUAGUUGAAAUACAACGAUGGUUUUUCAUAUCAUUGGUCGUGGUUGUAGUCCGUGCGAGAAUA
+  ss  (69nt):  (((((((..((((.....)))).(((((.......)))))....(((((.......)))))))))))).
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+    stem[1]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00063517|Glu|UUC|Homo DE sapiens
+
+mtdbD00063517|Glu|UUC|Homo         GUUCUUGUAGUUGAAA---UACAACGAUGGUUUUUCAUAUCAUUG------------------GUCGUGGUUGUAGUCCGUGCGAGAAUA
+#=GR mtdbD00063517|Glu|UUC|Homo PP ****************...99***********************7..................7**************************
+#=GC SS_cons                       (((((((,,<<<<________>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,,<<<<<_______>>>>>))))))):
+#=GC RF                            =======++====++++++++====+=====++***++=====++=======++++=======++=====+++++++============+
+//
+
+mtdbD00063517|Glu|UUC|Homo sapiens: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmp4eew_1jz.fa
+mtdbD00063514|His|GUG|Homo sapiens
+  seq (69nt): GUAAAUAUAGUUUAACCAAAACAUCAGAUUGUGAAUCUGACAACAGAGGCUUACGACCCCUUAUUUACC
+  ss  (69nt):  (((((((..((((.....)))).(((((.......)))))....(((((.......)))))))))))).
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+    stem[1]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=5 n_compatible=4 p_value=0.0692138671875
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00063514|His|GUG|Homo DE sapiens
+
+mtdbD00063514|His|GUG|Homo         GUAAAUAUAGUUUAACC---AAAACAUCAGAUUGUGAAUCUGAC-------------------AaCAGAGGCUUACGACCCCUUAUUUACC
+#=GR mtdbD00063514|His|GUG|Homo PP ****************6...7***********************...................99******776666666678********
+#=GC SS_cons                       (((((((,,<<<<________>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<_______>>>>>))))))):
+#=GC RF                            =======++====++++++++====+=====++***++=====++=======++++=======+.+=====+++++++============+
+//
+
+mtdbD00063514|His|GUG|Homo sapiens: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmpj7khlayx.fa
+mtdbD00063512|Gly|UCC|Homo sapiens
+  seq (68nt): ACUCUUUUAGUAUAAAUAGUACCGUUAACUUCCAAUUAACUAGUUUUGACAACAUUCAAAAAAGAGUA
+  ss  (68nt):  (((((((..((((.....)))).(((((.......)))))....((((.......)))))))))))..
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+    stem[1]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00063512|Gly|UCC|Homo DE sapiens
+
+mtdbD00063512|Gly|UCC|Homo         ACUCUUUUAGUAUAAA---UAGUACCGUUAACUUCCAAUUAACUA------------------GUUUUG--ACAACAuUCAAAAAAGAGUA
+#=GR mtdbD00063512|Gly|UCC|Homo PP ****************...89*********************995..................655555..3477445355689*******
+#=GC SS_cons                       (((((((,,<<<<________>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,,<<<<<_______.>>>>>))))))):
+#=GC RF                            =======++====++++++++====+=====++***++=====++=======++++=======++=====+++++++.============+
+//
+
+mtdbD00063512|Gly|UCC|Homo sapiens: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmp2u1mxpcg.fa
+mtdbD00125563|Glu|UUC|Saccharomyces cerevisiae
+  seq (72nt): GACCUUAUCGUCUAAUGGUUACGACAUCACCUCUUCAUGUUGAUAAUAUCGGUUCGAUUCCGAUUAAGGUUA
+  ss  (72nt):  (((((((..((((........)))).(((((.......)))))....(((((.......)))))))))))).
+  arm-loss diagnosis: UNANCHORED_fallback_structurally_absent=[2]  (anticodon anchor: ambiguous_2_loop_matches, register_offset=None)
+    stem[0]: n_pairs=4 n_compatible=3 p_value=0.151611328125
+    stem[1]: n_pairs=5 n_compatible=4 p_value=0.0692138671875
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00125563|Glu|UUC|Saccharomyces DE cerevisiae
+
+mtdbD00125563|Glu|UUC|Saccharomyces         GACCUUAUCGUCUAAU-GGUuACGACAUCACCUCUUCAUGUUGAU-------------------AaUAUCGGUUCGAUUCCGAUUAAGGUUA
+#=GR mtdbD00125563|Glu|UUC|Saccharomyces PP ****************.****************************...................99**************************
+#=GC SS_cons                                (((((((,,<<<<_______._>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<_______>>>>>))))))):
+#=GC RF                                     =======++====+++++++.+====+=====++***++=====++=======++++=======+.+=====+++++++============+
+//
+
+mtdbD00125563|Glu|UUC|Saccharomyces cerevisiae: CM:TRNAinf-euk.cm  [UNANCHORED_fallback_structurally_absent=[2]]
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmpvroiyt7j.fa
+mtdbD00063518|Thr|UGU|Homo sapiens
+  seq (66nt): GUCCUUGUAGUAUAAACUAAUACACCAGUCUUGUAAACCGGAGAUGAAAACCUUUUUCCAAGGACA
+  ss  (66nt):  (((((((..((((......)))).(((((.......)))))....(((....)))).))))))...
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+    stem[1]: n_pairs=5 n_compatible=4 p_value=0.0692138671875
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=3 n_compatible=3 p_value=0.052734375
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00063518|Thr|UGU|Homo DE sapiens
+
+mtdbD00063518|Thr|UGU|Homo         GUCCUUGUAGUAUAAAC--UAAUACACCAGUCUUGUAAACCGGA-------------------GaUGAA-----AACCUUUUuCCAAGGACA
+#=GR mtdbD00063518|Thr|UGU|Homo PP *****************..9************************...................77**99.....677654444*********
+#=GC SS_cons                       (((((((,,<<<<________>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<_______>>>>.>))))))):
+#=GC RF                            =======++====++++++++====+=====++***++=====++=======++++=======+.+=====+++++++====.========+
+//
+
+mtdbD00063518|Thr|UGU|Homo sapiens: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmp0qru6n5p.fa
+mtdbD00063516|Leu1|UAG|Homo sapiens
+  seq (71nt): ACUUUUAAAGGAUAACAGCUAUCCAUUGGUCUUAGGCCCCAAAAAUUUUGGUGCAACUCCAAAUAAAAGUA
+  ss  (71nt):  (((((((..((((.......)))).(((((.......)))))....(((((.......)))))))))))).
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+    stem[1]: n_pairs=5 n_compatible=4 p_value=0.0692138671875
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00063516|Leu1|UAG|Homo DE sapiens
+
+mtdbD00063516|Leu1|UAG|Homo         ACUUUUAAAGGAUAAC-AGCUAUCCAUUGGUCUUAGGCCCCAAA-------------------AaUUUUGGUGCAACUCCAAAUAAAAGUA
+#=GR mtdbD00063516|Leu1|UAG|Homo PP ****************.***************************...................99**************************
+#=GC SS_cons                        (((((((,,<<<<________>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<_______>>>>>))))))):
+#=GC RF                             =======++====++++++++====+=====++***++=====++=======++++=======+.+=====+++++++============+
+//
+
+mtdbD00063516|Leu1|UAG|Homo sapiens: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmpjxhs4yjk.fa
+mtdbD00125566|Tyr|GUA|Saccharomyces cerevisiae
+  seq (85nt): GGAGGGAUUUUCAAUGUUGGUAGUUGGAGUUGAGCUGUAAACUCAAUGACUUAGGUCUUCAUAGGUUCAAUUCCUAUUCCCUUCA
+  ss  (85nt):  (((((((..((((...........)))).(((((.......))))).(((....)))...(((((.......)))))))))))).
+  arm-loss diagnosis: CANONICAL_NO_ARM_LOSS  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+    stem[1]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+    stem[2]: n_pairs=3 n_compatible=3 p_value=0.052734375
+    stem[3]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00125566|Tyr|GUA|Saccharomyces DE cerevisiae
+
+mtdbD00125566|Tyr|GUA|Saccharomyces         GGAGGGAUUUUCAAuGUUGGUagUUGGAGUUGAGCUGUAAACUCAAU-GAC----UUAG----GUCUuCAUAGGUUCAAUUCCUAUUCCCUUCA
+#=GR mtdbD00125566|Tyr|GUA|Saccharomyces PP *********99998*********************************.888....6666....88889**************************
+#=GC SS_cons                                (((((((,,<<<<_.______.._>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<_______>>>>>))))))):
+#=GC RF                                     =======++====+.++++++..+====+=====++***++=====++=======++++=======+.+=====+++++++============+
+//
+
+mtdbD00125566|Tyr|GUA|Saccharomyces cerevisiae: CM:TRNAinf-euk.cm  [CANONICAL_NO_ARM_LOSS]
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmpaxf18q6y.fa
+mtdbD00125564|His|GUG|Saccharomyces cerevisiae
+  seq (71nt): GUGAAUAUAUUUCAAUGGUAGAAAAUACGCUUGUGGUGCGUUAAAUCUGAGUUCGAUUCUCAGUAUUCACC
+  ss  (71nt):  (((((((..((((.......)))).(((((.......)))))....(((((.......)))))))))))).
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+    stem[1]: n_pairs=5 n_compatible=4 p_value=0.0692138671875
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00125564|His|GUG|Saccharomyces DE cerevisiae
+
+mtdbD00125564|His|GUG|Saccharomyces         GUGAAUAUAUUUCAAU-GGUAGAAAAUACGCUUGUGGUGCGUUA-------------------AaUCUGAGUUCGAUUCUCAGUAUUCACC
+#=GR mtdbD00125564|His|GUG|Saccharomyces PP ****************.************************877...................77**************************
+#=GC SS_cons                                (((((((,,<<<<________>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<_______>>>>>))))))):
+#=GC RF                                     =======++====++++++++====+=====++***++=====++=======++++=======+.+=====+++++++============+
+//
+
+mtdbD00125564|His|GUG|Saccharomyces cerevisiae: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmpxohlq577.fa
+mtdbD00063519|Pro|UGG|Homo sapiens
+  seq (68nt): CAGAGAAUAGUUUAAAUUAGAAUCUUAGCUUUGGGUGCUAAUGGUGGAGUUAAAGACUUUUUCUCUGA
+  ss  (68nt):  .((((((..((((......)))).(((((.......)))))....(((((......))))))))))).
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+    stem[1]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00063519|Pro|UGG|Homo DE sapiens
+
+mtdbD00063519|Pro|UGG|Homo         CAGAGAAUAGUUUAAAU--UAGAAUCUUAGCUUUGGGUGCUAAUG------------------GUGGAGU-UAAAGA-CUUUUUCUCUGA
+#=GR mtdbD00063519|Pro|UGG|Homo PP ****************9..8************************8..................8998776.666665.778*********
+#=GC SS_cons                       (((((((,,<<<<________>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,,<<<<<_______>>>>>))))))):
+#=GC RF                            =======++====++++++++====+=====++***++=====++=======++++=======++=====+++++++============+
+//
+
+mtdbD00063519|Pro|UGG|Homo sapiens: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmpfec6bb34.fa
+mtdbD00339286|Asn|GUU|Schizosaccharomyces pombe
+  seq (71nt): GUUGUUGUAGCUCAAUGGUAGAGCAAGUCACUGUUAAUGACCUGAUAGUGGUUCGAUUCCACUCAAUAACG
+  ss  (71nt):  (((((((..((((.......)))).(((((.......)))))....(((((.......)))))))))))).
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+    stem[1]: n_pairs=5 n_compatible=4 p_value=0.0692138671875
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00339286|Asn|GUU|Schizosaccharomyces DE pombe
+
+mtdbD00339286|Asn|GUU|Schizosaccharomyces         GUUGUUGUAGCUCAAU-GGUAGAGCAAGUCACUGUUAAUGACCU-------------------GaUAGUGGUUCGAUUCCACUCAAUAACG
+#=GR mtdbD00339286|Asn|GUU|Schizosaccharomyces PP ****************.*************************8*...................88**************************
+#=GC SS_cons                                      (((((((,,<<<<________>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<_______>>>>>))))))):
+#=GC RF                                           =======++====++++++++====+=====++***++=====++=======++++=======+.+=====+++++++============+
+//
+
+mtdbD00339286|Asn|GUU|Schizosaccharomyces pombe: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmpryx46esg.fa
+mtdbD00339284|Lys|UUU|Schizosaccharomyces pombe
+  seq (73nt): GGGGAUGUAGCUCAAUGGUUAGAGCUUUCGCCUUUUAAGCGAUAGGAUAAGGGUUCAAAUCCCUUCAGACCCA
+  ss  (73nt):  (((((((..((((........)))).(((((.......))))).....(((((.......)))))))))))).
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+    stem[1]: n_pairs=5 n_compatible=4 p_value=0.0692138671875
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00339284|Lys|UUU|Schizosaccharomyces DE pombe
+
+mtdbD00339284|Lys|UUU|Schizosaccharomyces         GGGGAUGUAGCUCAAU-GGUuAGAGCUUUCGCCUUUUAAGCGAUAG------------------GaUAAGGGUUCAAAUCCCUUCAGACCCA
+#=GR mtdbD00339284|Lys|UUU|Schizosaccharomyces PP ***6666*********.*****************************..................****************************
+#=GC SS_cons                                      (((((((,,<<<<_______._>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<_______>>>>>))))))):
+#=GC RF                                           =======++====+++++++.+====+=====++***++=====++=======++++=======+.+=====+++++++============+
+//
+
+mtdbD00339284|Lys|UUU|Schizosaccharomyces pombe: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmpa8xpth_n.fa
+mtdbD00339289|Leu1|UAG|Schizosaccharomyces pombe
+  seq (74nt): GCAGAUGUGAUGAAAUUGGUAAACAUGUUUACCUUAGGAGUAAAAUCUUGAAGGUUCGAAUCCUUCCAUCUGUA
+  ss  (74nt):  (((((((..((((.........)))).(((((.......))))).....(((((.......)))))))))))).
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=3 p_value=0.151611328125
+    stem[1]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00339289|Leu1|UAG|Schizosaccharomyces DE pombe
+
+mtdbD00339289|Leu1|UAG|Schizosaccharomyces         GCAGAUGUGAUGAAAUUGGUaAACAUGUUUACCUUAGGAGUAAAA--------UCU---------UGAAGGUUCGAAUCCUUCCAUCUGUA
+#=GR mtdbD00339289|Leu1|UAG|Schizosaccharomyces PP *********************************************........666.........**************************
+#=GC SS_cons                                       (((((((,,<<<<_______._>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,,<<<<<_______>>>>>))))))):
+#=GC RF                                            =======++====+++++++.+====+=====++***++=====++=======++++=======++=====+++++++============+
+//
+
+mtdbD00339289|Leu1|UAG|Schizosaccharomyces pombe: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+mtdbD00125565|Lys|UUU|Saccharomyces cerevisiae
+  seq (72nt): GAGAAUAUUGUUUAAUGGUAAAACAGUUGUCUUUUAAGCAACCCAUGCUUGGUUCAACUCCAGCUAUUCUCA
+  ss  (72nt):  (((((((..((((.......)))).(((((.......)))))....((.(((.......)))))))))))).
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+    stem[1]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00125565|Lys|UUU|Saccharomyces DE cerevisiae
+
+mtdbD00125565|Lys|UUU|Saccharomyces         GAGAAUAUUGUUUAAU-GGUAAAACAGUUGUCUUUUAAGCAACCC------------------AUGCuUGGUUCAACUCCAGCUAUUCUCA
+#=GR mtdbD00125565|Lys|UUU|Saccharomyces PP ****************.***************************8..................899945**********************
+#=GC SS_cons                                (((((((,,<<<<________>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,,<<.<<<_______>>>>>))))))):
+#=GC RF                                     =======++====++++++++====+=====++***++=====++=======++++=======++==.===+++++++============+
+//
+
+mtdbD00125565|Lys|UUU|Saccharomyces cerevisiae: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmp0akzm2y1.fa
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmpi_fy2l7b.fa
+mtdbD00339287|Thr|UGU|Schizosaccharomyces pombe
+  seq (73nt): GCUAAUUUAACUCAAUUGGUAGAGUGCGUACCUUGUAAGUACGAAGUUAGAGGUUCAAUUCCUCUAAUUAGCA
+  ss  (73nt):  (((((((..((((........)))).(((((.......))))).....(((((.......)))))))))))).
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+    stem[1]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00339287|Thr|UGU|Schizosaccharomyces DE pombe
+
+mtdbD00339287|Thr|UGU|Schizosaccharomyces         GCUAAUUUAACUCAAUUGGUAGAGUGCGUACCUUGUAAGUACGAA------------------GuUAGAGGUUCAAUUCCUCUAAUUAGCA
+#=GR mtdbD00339287|Thr|UGU|Schizosaccharomyces PP *********************************************..................****************************
+#=GC SS_cons                                      (((((((,,<<<<________>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<_______>>>>>))))))):
+#=GC RF                                           =======++====++++++++====+=====++***++=====++=======++++=======+.+=====+++++++============+
+//
+
+mtdbD00339287|Thr|UGU|Schizosaccharomyces pombe: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmpck18clos.fa
+mtdbD00339285|Ser1|GCU|Schizosaccharomyces pombe
+  seq (83nt): GGAAAAAUAGUUCUAAUUGGUAAGAAGGAUACUUGCUACGUAUCUGGUGAAUAACCUUGUGAGUUCGAGUCUCACUUUUUCCG
+  ss  (83nt):  (((((((...((((........)))).(((((.......)))))..((.))).))...(((((.......)))))))))....
+  arm-loss diagnosis: CANONICAL_NO_ARM_LOSS  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+    stem[1]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+    stem[2]: n_pairs=2 n_compatible=2 p_value=0.140625
+    stem[3]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00339285|Ser1|GCU|Schizosaccharomyces DE pombe
+
+mtdbD00339285|Ser1|GCU|Schizosaccharomyces         GGAAAAAUaGUUCUAAUUGGUAAGAAGGAUACUUGCUACGUAUCUGGUg-----------AAUaACCuUGUGAGUUCGAGUCUCACUUUUUCCG
+#=GR mtdbD00339285|Ser1|GCU|Schizosaccharomyces PP ********66***********************************7775...........33657777**************************
+#=GC SS_cons                                       (((((((,.,<<<<________>>>>,<<<<<_______>>>>>,,<<.<<<<<____>>>>>.>>,.,<<<<<_______>>>>>))))))):
+#=GC RF                                            =======+.+====++++++++====+=====++***++=====++==.=====++++=====.==+.+=====+++++++============+
+//
+
+mtdbD00339285|Ser1|GCU|Schizosaccharomyces pombe: CM:TRNAinf-euk.cm  [CANONICAL_NO_ARM_LOSS]
+mtdbD00339292|Ile|GAU|Schizosaccharomyces pombe
+  seq (73nt): AGUUCUUUAACUUAAAAGGUCAGAGUGCAGACUUGAUAAGUCUGUGGUAUUGGUUCGAUUCCAAUAAGAACUA
+  ss  (73nt):  (((((((..((((.........)))).(((((.......)))))....(((((.......)))))))))))).
+  arm-loss diagnosis: UNANCHORED_fallback_structurally_absent=[2]  (anticodon anchor: ambiguous_2_loop_matches, register_offset=None)
+    stem[0]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+    stem[1]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00339292|Ile|GAU|Schizosaccharomyces DE pombe
+
+mtdbD00339292|Ile|GAU|Schizosaccharomyces         AGUUCUUUAACUUAAAAGGUcAGAGUGCAGACUUGAUAAGUCUGUG------------------GUAUUGGUUCGAUUCCAAUAAGAACUA
+#=GR mtdbD00339292|Ile|GAU|Schizosaccharomyces PP **************999****************************8..................8**************************
+#=GC SS_cons                                      (((((((,,<<<<_______._>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,,<<<<<_______>>>>>))))))):
+#=GC RF                                           =======++====+++++++.+====+=====++***++=====++=======++++=======++=====+++++++============+
+//
+
+mtdbD00339292|Ile|GAU|Schizosaccharomyces pombe: CM:TRNAinf-euk.cm  [UNANCHORED_fallback_structurally_absent=[2]]
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmpahu2wdd8.fa
+mtdbD00339290|Leu2|UAG|Schizosaccharomyces pombe
+  seq (74nt): GCAGAUGUGAUGAAAUUGGUAAACAUGUUUACCUUAGGAGUAAAAUCUUGAAGGUUCGAAUCCUUCCAUCUGUA
+  ss  (74nt):  (((((((..((((.........)))).(((((.......))))).....(((((.......)))))))))))).
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=3 p_value=0.151611328125
+    stem[1]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00339290|Leu2|UAG|Schizosaccharomyces DE pombe
+
+mtdbD00339290|Leu2|UAG|Schizosaccharomyces         GCAGAUGUGAUGAAAUUGGUaAACAUGUUUACCUUAGGAGUAAAA--------UCU---------UGAAGGUUCGAAUCCUUCCAUCUGUA
+#=GR mtdbD00339290|Leu2|UAG|Schizosaccharomyces PP *********************************************........666.........**************************
+#=GC SS_cons                                       (((((((,,<<<<_______._>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,,<<<<<_______>>>>>))))))):
+#=GC RF                                            =======++====+++++++.+====+=====++***++=====++=======++++=======++=====+++++++============+
+//
+
+mtdbD00339290|Leu2|UAG|Schizosaccharomyces pombe: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmpz0u0dmlk.fa
+mtdbD00339288|Phe|GAA|Schizosaccharomyces pombe
+  seq (72nt): GCUCUGAUAACUUAACGGUUAAAGUGCAGUAUUGAAGCUGCUGAGAUAUUGGUUCGAUUCCAUUUCAGAGCA
+  ss  (72nt):  (((((((..((((........)))).(((((.......)))))....(((((.......)))))))))))).
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+    stem[1]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=5 n_compatible=4 p_value=0.0692138671875
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00339288|Phe|GAA|Schizosaccharomyces DE pombe
+
+mtdbD00339288|Phe|GAA|Schizosaccharomyces         GCUCUGAUAACUUAAC-GGUuAAAGUGCAGUAUUGAAGCUGCUGA-------------------GaUAUUGGUUCGAUUCCAUUUCAGAGCA
+#=GR mtdbD00339288|Phe|GAA|Schizosaccharomyces PP ****************.****************************...................88**************************
+#=GC SS_cons                                      (((((((,,<<<<_______._>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<_______>>>>>))))))):
+#=GC RF                                           =======++====+++++++.+====+=====++***++=====++=======++++=======+.+=====+++++++============+
+//
+
+mtdbD00339288|Phe|GAA|Schizosaccharomyces pombe: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+mtdbD00339293|Val|UAC|Schizosaccharomyces pombe
+  seq (73nt): AGGAGAAUAGCUUAAUUGGUAGAGCACUUACCUUACAAGUAAGAUUAUAAGGGUUCAAAUCCCUUUUCUCCUA
+  ss  (73nt):  (((((((..((((........)))).(((((.......))))).....(((((.......)))))))))))).
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+    stem[1]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00339293|Val|UAC|Schizosaccharomyces DE pombe
+
+mtdbD00339293|Val|UAC|Schizosaccharomyces         AGGAGAAUAGCUUAAUUGGUAGAGCACUUACCUUACAAGUAAGAU------------------UaUAAGGGUUCAAAUCCCUUUUCUCCUA
+#=GR mtdbD00339293|Val|UAC|Schizosaccharomyces PP ********************************************6..................67**************************
+#=GC SS_cons                                      (((((((,,<<<<________>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<_______>>>>>))))))):
+#=GC RF                                           =======++====++++++++====+=====++***++=====++=======++++=======+.+=====+++++++============+
+//
+
+mtdbD00339293|Val|UAC|Schizosaccharomyces pombe: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+  $ cmalign --notrunc --nonbanded -g data/TRNAinf-euk.cm /tmp/tmp_vr4yg8v.fa
+mtdbD00339291|His|GUG|Schizosaccharomyces pombe
+  seq (72nt): GUGAUUGUAAUUCAAUGGUAGAAUGCUUAUUUGUGGCAUAAGAAGUUCUUGGUUCGAUUCCAAGUAAUCACC
+  ss  (72nt):  (((((((..((((.......)))).(((((.......))))).....(((((.......)))))))))))).
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+    stem[1]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00339291|His|GUG|Schizosaccharomyces DE pombe
+
+mtdbD00339291|His|GUG|Schizosaccharomyces         GUGAUUGUAAUUCAAU-GGUAGAAUGCUUAUUUGUGGCAUAAGAA------------------GuUCUUGGUUCGAUUCCAAGUAAUCACC
+#=GR mtdbD00339291|His|GUG|Schizosaccharomyces PP ****************.****************************..................****************************
+#=GC SS_cons                                      (((((((,,<<<<________>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<_______>>>>>))))))):
+#=GC RF                                           =======++====++++++++====+=====++***++=====++=======++++=======+.+=====+++++++============+
+//
+
+mtdbD00339291|His|GUG|Schizosaccharomyces pombe: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+mtdbD00339294|Ala|UGC|Schizosaccharomyces pombe
+  seq (73nt): GGGGAUUUAAUUUAAUUGGUUAGAAUAUUGUGUUUGCACCACAAAAAUCUGGUUUCGAGUACCAGAAUCUCCA
+  ss  (73nt):  (((((((..((((.........)))).(((((.......)))))....(((((.......)))))))))))).
+  arm-loss diagnosis: T_OR_VAR_ARM_MISSING_slots=[2]  (anticodon anchor: unique_loop_match, register_offset=0)
+    stem[0]: n_pairs=4 n_compatible=4 p_value=0.019775390625
+    stem[1]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+    stem[2]: n_pairs=0 n_compatible=0 p_value=None
+    stem[3]: n_pairs=5 n_compatible=5 p_value=0.007415771484375
+  raw cmalign stockholm:
+# STOCKHOLM 1.0
+#=GF AU Infernal 1.1.5
+
+#=GS mtdbD00339294|Ala|UGC|Schizosaccharomyces DE pombe
+
+mtdbD00339294|Ala|UGC|Schizosaccharomyces         GGGGAUUUAAUUUAAUUGGUuAGAAUAUUGUGUUUGCACCACAAA-------------------AaUCUGGUUUCGAGUACCAGAAUCUCCA
+#=GR mtdbD00339294|Ala|UGC|Schizosaccharomyces PP *********************************************...................99*************9************
+#=GC SS_cons                                      (((((((,,<<<<_______._>>>>,<<<<<_______>>>>>,,<<<<<<<____>>>>>>>,.,<<<<<_______>>>>>))))))):
+#=GC RF                                           =======++====+++++++.+====+=====++***++=====++=======++++=======+.+=====+++++++============+
+//
+
+mtdbD00339294|Ala|UGC|Schizosaccharomyces pombe: CM:TRNAinf-euk.cm  [T_OR_VAR_ARM_MISSING_slots=[2]]
+table: output/sprinzl_mapping.tsv
