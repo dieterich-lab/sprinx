@@ -152,13 +152,26 @@ sprinx.py                   CLI, alignment, arm-loss classification, Sprinzl
 conftest.py                  pytest setup, loads .env / SPRINX_* vars for integration tests
 env.example                  template for .env
 data/                        example FASTA, canonical CM, armless CM library
+  canonical.fa                 36 real cloverleaf mt-tRNAs (human, mouse, S. cerevisiae,
+                                S. pombe), ground truth for "no arm-loss call should fire"
+  D_armless.fa                 3 real D-armless mt-tRNAs, ground truth for missing_arm="d"
+  T_armless.fa                 17 real T-armless mt-tRNAs, ground truth for missing_arm="t"
+  both_armless_R_culicivorax_mt-tRNA-Ile.fa  1 real doubly-armless mt-tRNA (R. culicivorax),
+                                ground truth for missing_arm="d_and_t"
+  all.fa                       concatenation of the four files above (57 sequences),
+                                for exercising every arm-loss shape in one run
+  TRNAinf-euk.cm                eukaryotic whole-family canonical CM (QutRNA2)
   mitofinder_models/           symlink to canonical CMs from MitoFinder, old INFERNAL-1 [1.0] format;
                                 cmalign (Infernal 1.1.x) refuses these outright
   full_tRNAs_mitofinder_tRNAScanSE/ same CMs reformatted to current INFERNAL1/a via
                                 `cmconvert -a`, one file in, one file out, same filename;
-                                originals in mitofinder_models/ are untouched -- regenerate
-                                with: `for f in data/mitofinder_models/*.cm; do
+                                includes `TRNAinf-bact.cm`/`TRNAinf-euk.cm` (whole-family)
+                                and per-AA `Metazoa_{AA}.cm` files; originals in
+                                mitofinder_models/ are untouched -- regenerate with:
+                                `for f in data/mitofinder_models/*.cm; do
                                 cmconvert -a "$f" > "data/full_tRNAs_mitofinder_tRNAScanSE/$(basename "$f")"; done`
+  truncated_cm/                armless CM library, `armless_trn{AA}_wo_{d,t,d_and_t}.cm`
+                                (Ozerova et al. 2024), used for --armless-cm-dir
 tests/
   test_sprinx_unit.py          unit tests, run anywhere
   test_sprinx_integration.py   runs real cmalign / RNAfold end to end

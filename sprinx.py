@@ -99,6 +99,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import textwrap
 import warnings
 import xml.etree.ElementTree as ET
 from collections import defaultdict
@@ -1153,31 +1154,127 @@ SVG_NS = "http://www.w3.org/2000/svg"
 ET.register_namespace("", SVG_NS)
 
 
-def _grid_svg(panels, ncols, gap=20, caption_height=32):
-    """panels: list of (svg_root_element, width, height, caption). arranges
-    them into a real grid (ncols per row), unlike R2DT's own --stitch (which
-    only lays panels left-to-right in a single row -- unusable past a handful
-    of sequences, since the file just gets wider without bound). cell size is
-    uniform (max panel width/height across all panels) so rows/columns stay
-    aligned; each panel keeps its own native size, placed top-left in its
-    cell. nested <svg> elements are SVG's own mechanism for embedding one
-    diagram inside another at a given position/size -- no rasterization
-    needed to compose them."""
-    cell_w = max(w for _, w, _, _ in panels) + gap
-    cell_h = max(h for _, _, h, _ in panels) + gap + caption_height
+def _flip_panel_north(panel, width, height):
+    """mirror a panel vertically in place (flip y only, x untouched): R2R (the
+    template-free layout engine R2DT uses here) always draws the acceptor
+    stem at the bottom, with no orientation flag exposed to change that --
+    confirmed consistent across every sequence/shape checked, so a single
+    unconditional flip suffices. this is a vertical mirror, not a 180-degree
+    rotation: a rotation negates x too, which would swing every side arm from
+    east to west as a side effect -- mirroring y alone moves the acceptor
+    stem to the top while leaving east/west exactly where R2R put them.
+    every <text> glyph gets its own counter-mirror about its own y: two
+    y-mirrors about different lines compose into a pure translation, so the
+    glyph itself stays upright while still landing at its correctly-mirrored
+    position -- only the backbone/pairing geometry actually flips."""
+    wrapper = ET.Element(f"{{{SVG_NS}}}g", {"transform": f"matrix(1 0 0 -1 0 {height})"})
+    for child in list(panel):
+        panel.remove(child)
+        wrapper.append(child)
+    panel.append(wrapper)
+    for text in wrapper.iter(f"{{{SVG_NS}}}text"):
+        ty = text.get("y", "0")
+        text.set("transform", f"matrix(1 0 0 -1 0 {2 * float(ty)})")
+
+
+NUCLEOTIDE_LETTERS = set("ACGUN")
+SPRINZL_LABEL_STEP = 5
+
+
+def _inject_sprinzl_labels(panel, sprinzl, label_step=SPRINZL_LABEL_STEP):
+    """replace R2DT's own plain sequence-position numbering (1, 2, 3, ...,
+    shown every 10th residue by default -- unrelated to Sprinzl coordinates)
+    with sprinx's own Sprinzl labels. shown every label_step-th INTEGER
+    position, but always for lettered insertions (17a, 20a, ...) since those
+    don't follow a regular numeric cadence and would otherwise never appear.
+    each nucleotide is its own top-level <g><title>i (...)</title><text>BASE
+    </text></g> emitted by R2DT in strict 5'->3' order, so a running count of
+    real base letters (skipping the synthetic 5'/3' end markers) lines up
+    exactly with sprinzl's own 0-indexed final_seq positions."""
+    for g in list(panel):
+        text = g.find(f"{{{SVG_NS}}}text")
+        line = g.find(f"{{{SVG_NS}}}line")
+        cls = (text.get("class") if text is not None else None) or \
+              (line.get("class") if line is not None else None) or ""
+        if "numbering-label" in cls or "numbering-line" in cls:
+            panel.remove(g)
+
+    seq_idx = 0
+    for g in list(panel):
+        text = g.find(f"{{{SVG_NS}}}text")
+        if text is None or (text.text or "").strip() in ("5'", "3'", ""):
+            continue
+        if (text.text or "").strip().upper() not in NUCLEOTIDE_LETTERS:
+            continue
+        label = sprinzl.get(seq_idx, "")
+        seq_idx += 1
+        show = label and (
+            not label[:-1].isdigit()
+            or int(re.match(r"\d+", label).group()) % label_step == 0
+            or label == "1"
+        )
+        if not show:
+            continue
+        x, y = float(text.get("x")), float(text.get("y"))
+        label_el = ET.SubElement(panel, f"{{{SVG_NS}}}text", {
+            "x": str(x - 10), "y": str(y + 13),
+            "class": "numbering-label",
+        })
+        label_el.text = label
+
+
+CAPTION_FONT_SIZE = 11
+CAPTION_LINE_HEIGHT = 14
+
+
+def _wrap_caption(text, cell_w, max_lines=4):
+    """text (header and summary, '\\n'-separated) -> wrapped lines that fit
+    cell_w, each original line wrapped independently so the header and
+    summary never run together into one blob. width is estimated from
+    monospace glyph width since this is drawn as SVG <text>, not measured
+    by a real layout engine."""
+    chars_per_line = max(int(cell_w / (CAPTION_FONT_SIZE * 0.62)), 10)
+    lines = [line for para in text.split("\n")
+             for line in (textwrap.wrap(para, width=chars_per_line) or [""])]
+    return lines[:max_lines]
+
+
+def _grid_svg(panels, ncols, gap=20):
+    """panels: list of (svg_root_element, width, height, caption, sprinzl).
+    arranges them into a real grid (ncols per row), unlike R2DT's own
+    --stitch (which only lays panels left-to-right in a single row --
+    unusable past a handful of sequences, since the file just gets wider
+    without bound). cell size is uniform (max panel width/height across all
+    panels) so rows/columns stay aligned; each panel keeps its own native
+    size, centered in its cell. captions are wrapped to the cell width (see
+    _wrap_caption) and centered above the panel, not left-aligned to the
+    cell -- a narrow panel in a wide cell would otherwise read as belonging
+    to its neighbour. nested <svg> elements are SVG's own mechanism for
+    embedding one diagram inside another at a given position/size -- no
+    rasterization needed to compose them."""
+    cell_w = max(w for _, w, _, _, _ in panels) + gap
+    caption_lines = [_wrap_caption(caption, cell_w) for _, _, _, caption, _ in panels]
+    caption_height = max(len(lines) for lines in caption_lines) * CAPTION_LINE_HEIGHT + 6
+    cell_h = max(h for _, _, h, _, _ in panels) + gap + caption_height
     nrows = -(-len(panels) // ncols)
 
     root = ET.Element(f"{{{SVG_NS}}}svg", {
         "width": str(ncols * cell_w), "height": str(nrows * cell_h),
     })
-    for i, (panel, w, h, caption) in enumerate(panels):
+    for i, ((panel, w, h, _, sprinzl), lines) in enumerate(zip(panels, caption_lines)):
         row, col = divmod(i, ncols)
-        x, y = col * cell_w + gap / 2, row * cell_h + caption_height
-        text = ET.SubElement(root, f"{{{SVG_NS}}}text", {
-            "x": str(x), "y": str(row * cell_h + caption_height * 0.7),
-            "font-family": "monospace", "font-size": "12",
-        })
-        text.text = caption[:60]
+        x = col * cell_w + (cell_w - w) / 2
+        y = row * cell_h + caption_height
+        cx = x + w / 2
+        for li, line in enumerate(lines):
+            text = ET.SubElement(root, f"{{{SVG_NS}}}text", {
+                "x": str(cx), "y": str(row * cell_h + 12 + li * CAPTION_LINE_HEIGHT),
+                "font-family": "monospace", "font-size": str(CAPTION_FONT_SIZE),
+                "text-anchor": "middle",
+            })
+            text.text = line
+        _inject_sprinzl_labels(panel, sprinzl)
+        _flip_panel_north(panel, w, h)
         panel.set("x", str(x))
         panel.set("y", str(y))
         root.append(panel)
@@ -1220,7 +1317,7 @@ def make_plot(results, out_path, r2dt_image=R2DT_DEFAULT_IMAGE, ncols=6):
                 continue
             root = ET.parse(candidates[0]).getroot()
             width, height = float(root.get("width")), float(root.get("height"))
-            panels.append((root, width, height, f"{r['header']} {r['summary']}"))
+            panels.append((root, width, height, f"{r['header']}\n{r['summary']}", r["sprinzl"]))
 
         if not panels:
             logger.warning("R2DT plotting produced no SVG output")
