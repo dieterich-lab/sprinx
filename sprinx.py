@@ -807,9 +807,11 @@ def select_cm_and_align(header, seq, canonical_cm_tiers, armless_cm_index):
     for tier in canonical_cm_tiers:
         path = _resolve_canonical_for_tier(header, tier)
         if path is None:
+            logger.info(f"{header}: skipping a canonical CM tier -- no CM for this amino acid there")
             continue
         aln = cmalign_one(header, seq, path)
         if aln is None:
+            logger.info(f"{header}: moving to next canonical CM tier -- alignment failed")
             continue
         diag = classify_arm_loss(header, aln["aligned_seq"], aln["ss_cons"])
         if canonical_alignment is None:               # keep first usable tier as fallback
@@ -817,6 +819,7 @@ def select_cm_and_align(header, seq, canonical_cm_tiers, armless_cm_index):
         if diag["anticodon_stem_index"] is not None:   # clean anchor: stop searching
             canonical_alignment, canonical_cm, diagnosis = aln, path, diag
             break
+        logger.info(f"{header}: moving to next canonical CM tier -- anticodon did not anchor cleanly here")
 
     if canonical_alignment is None:
         return _routing_result(None, None, None)
