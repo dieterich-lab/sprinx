@@ -58,14 +58,33 @@ One row per nucleotide, written as TSV:
 | `rerouted` | whether it got rerouted to an armless CM |
 | `arm_loss_call` | structural diagnosis string, glossary at the bottom of `sprinx.py` |
 
-`--plot` draws a grid of cloverleaves with Sprinzl labels, laid out with ViennaRNA's
-NAVIEW. Useful for sanity-checking a run, not part of the actual output.
+`--plot` renders one 2D diagram per sequence via [R2DT](https://r2dt.bio), stitched
+into a single file -- `.svg`, `.png`, or `.pdf`, chosen by the extension on
+`--plot`'s path (R2DT itself only emits SVG; PNG/PDF are converted from that via
+`cairosvg`). It draws sprinx's own final structure for each sequence (arm-loss
+calls and threading-failure patches included) using R2DT's template-free
+`stockholm` mode -- not a structure R2DT would re-derive itself, which could
+silently disagree with sprinx's own diagnosis. Since these sequences aren't a real
+alignment, `build_r2dt_stockholm` fakes one: every sequence is concatenated
+end-to-end into a single row, with one `#=GC structureID` region per sequence (see
+[R2DT's Stockholm docs](https://docs.r2dt.bio/en/latest/stockholm-alignments.html)).
+Useful for sanity-checking a run, not part of the actual output.
+
+Requires an R2DT Singularity image (`--r2dt-image`, default `lib/r2dt` next to
+`sprinx.py`) and `singularity`/`apptainer` on `PATH`.
+
+For any sequence RNAfold-patched a CM threading failure, a second file is also
+written with `_CMonly` inserted before the extension (e.g. `cloverleaves.svg` ->
+`cloverleaves_CMonly.svg`), containing just those sequences rendered with their
+pre-patch, CM-only structure -- so the patch's effect is visible side by side
+rather than assumed.
 
 ## Requirements
 
-- Python 3, with `numpy`, `pandas`, `matplotlib`, `RNA` (ViennaRNA), `forgi`,
-  `biopython`, `loguru`, `scipy`.
+- Python 3, with `pandas`, `RNA` (ViennaRNA), `forgi`, `biopython`, `loguru`,
+  `scipy`, `cairosvg` (only needed for `--plot`'s PNG/PDF output).
 - Infernal, with `cmalign` on `PATH`.
+- For `--plot`: an R2DT Singularity image and `singularity`/`apptainer` on `PATH`.
 - One or more canonical mt-tRNA CMs, e.g. `TRNAinf-euk.cm`. `--canonical-cm`
   takes multiple sources tried in priority order per sequence: the first
   source whose alignment anchors the anticodon unambiguously wins. Each

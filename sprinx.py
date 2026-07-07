@@ -83,34 +83,27 @@ sprinx.py -- Sprinzl-coordinate annotation for mt-tRNAs.
 
 5. output
    sprinzl_mapping.tsv: seq_id, seq_index, nucleotide, sprinzl_position, region,
-   cm_used, rerouted, arm_loss_call. optional --plot for 2D cloverleaf PNGs.
+   cm_used, rerouted, arm_loss_call. optional --plot for an R2DT-rendered 2D
+   diagram (one panel per sequence, stitched into a single SVG); see README
+   for the R2DT Singularity image setup.
 
-usage:
-  python sprinx.py --fasta seqs.fa --canonical-cm TRNAinf-euk.cm \\
-      --armless-cm-dir cm_models/ --out results/sprinzl_mapping.tsv
-  python sprinx.py --fasta seqs.fa --canonical-cm TRNAinf-euk.cm \\
-      --armless-cm-dir cm_models/ --plot --processes 8 --debug
-  python sprinx.py --fasta seqs.fa --canonical-cm cm_models_by_clade/ \\
-      --armless-cm-dir cm_models/ --processes 8
-  # multiple canonical CM tiers, tried in order (bacterial whole-family CM first,
-  # then a metazoan per-AA directory)
-  python sprinx.py --fasta seqs.fa \\
-      --canonical-cm TRNAinf-bact.cm cm_models_by_clade/ \\
-      --armless-cm-dir cm_models/ --processes 8
+usage: see README.md, or `python sprinx.py --help`.
 """
 
 import argparse
+import glob
 import multiprocessing
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
 import warnings
+import xml.etree.ElementTree as ET
 from collections import defaultdict
 
-import matplotlib
-import numpy as np
+import cairosvg
 import pandas as pd
 import RNA
 from forgi.graph.bulge_graph import BulgeGraph
@@ -118,9 +111,6 @@ from Bio.Data.IUPACData import protein_letters_3to1
 from Bio import SeqIO
 from loguru import logger
 from scipy.stats import binomtest
-
-import matplotlib.pyplot as plt  # pylint: disable=wrong-import-position
-matplotlib.use("Agg")  # must precede any pyplot state; no display available
 
 warnings.filterwarnings("ignore")
 
@@ -161,8 +151,6 @@ for _p in range(54, 61):  SPRINZL_REGION[str(_p)] = "T_loop"
 for _p in range(61, 66):  SPRINZL_REGION[str(_p)] = "T_stem_3"
 for _p in range(66, 73):  SPRINZL_REGION[str(_p)] = "acceptor_3"
 for _p in range(73, 77):  SPRINZL_REGION[str(_p)] = "discriminator_CCA"
-
-NT_COLOUR = {"A": "#c0392b", "U": "#2471a3", "G": "#d35400", "C": "#1e8449"}
 
 # armless CM filename regex; naming follows Ozerova et al. 2024 (PMC11571959).
 ARMLESS_CM_RE = re.compile(r"armless_trn(\w+)_wo_(d_and_t|d|t)\.cm$")
@@ -378,18 +366,14 @@ def cmalign_one(header, seq, cm_path):
 
 def finalize_structure(alignment):
     """gapped cmalign alignment -> (ungapped_seq, ungapped_dotbracket) for Sprinzl
-    numbering. strips both gap symbols: '-' (model deletion) and '.' (multi-seq
-    insert gap). converts WUSS to dot-bracket.
-    ss_cons encodes the CM's consensus structure -- both brackets of a pair can be
-    present even when THIS sequence deletes one side of it (e.g. one arm of a stem
-    genuinely absent). nulling only the bracket on the deleted side and leaving its
-    partner would let a plain left-to-right bracket-matching (drop_orphan_brackets,
-    RNA.ptable) silently re-pair that orphaned bracket with an unrelated stem instead
-    of recognizing it as broken -- observed corrupting the acceptor stem when a T-arm
-    lost only its 5' side. fix: read the pairing from the full, gap-free consensus
-    db via RNA.ptable *before* stripping, and null BOTH sides of any pair where
-    either column is gapped in this sequence, so stripping can never create an
-    orphan to begin with."""
+    numbering. strips gap symbols ('-' deletion, '.' insert gap); converts WUSS
+    to dot-bracket. ss_cons's pair can have one side gapped in THIS sequence
+    (e.g. genuine arm loss); nulling only that side and stripping would let
+    naive re-matching silently re-pair the orphan with an unrelated stem
+    (observed corrupting the acceptor stem). fix: read pairing from the full
+    consensus db via RNA.ptable before stripping, and null BOTH sides of any
+    pair where either column is gapped here, so stripping can't create an
+    orphan at all."""
     aligned_seq, ss_cons = alignment["aligned_seq"], alignment["ss_cons"]
     db = list(RNA.db_from_WUSS(ss_cons))
     pt = RNA.ptable("".join(db))
@@ -489,21 +473,12 @@ def find_anticodon_stem_index(aligned_seq, stem_loop_elements, anticodon):
 
 
 def stem_complementarity(aligned_seq, ss, elem):
-    """WC/wobble pairing check for one stem element.
-    n_pairs: columns where both pairing partners are simultaneously non-gap.
-    n_compatible: of those, pairs that are WC or G-U wobble.
-    p_value: binomial test against null rate len(WC_PAIRS)/16 = 6/16 (the fraction
-      of the 16 possible dinucleotides that form a WC/wobble pair; this is a
-      combinatorial fact, not a fitted parameter).
-    n_pairs==0 is a statement of structural impossibility, not a threshold call:
-      if every alignment column that the CM designated as a stem pair has at least
-      one of its two partners as a gap character, then no base pair can form at any
-      position in the stem regardless of the nucleotides present. the arm cannot
-      exist. this is categorically different from n_pairs > 0 with low n_compatible,
-      which would suggest a poorly-paired but structurally present stem.
-    p_value is not thresholded: short stems (3-5 bp, common for D-arm) frequently
-      lack statistical power even when the stem is real. callers read
-      per_stem_complementarity directly rather than relying on a binary verdict.
+    """WC/wobble pairing check for one stem element. n_pairs: columns where both
+    partners are simultaneously non-gap (0 pairs = structurally impossible for
+    a stem to exist there, not a threshold call). n_compatible: of those, WC or
+    G-U wobble pairs. p_value: binomial test vs null rate len(WC_PAIRS)/16, not
+    thresholded (short D-arm stems often lack power even when real) -- callers
+    read per_stem_complementarity directly instead of a binary verdict.
     raw WUSS in ss is handled transparently by db_from_WUSS."""
     db = RNA.db_from_WUSS(ss)
     pt = RNA.ptable(db)
@@ -623,31 +598,26 @@ MIN_STEM_PAIRS = 3
 
 def arm_span_has_enough_sequence(aligned_seq, elem):
     """first-stage (fast, hard) filter after a stem slot is flagged absent: does
-    the span even contain enough nucleotides to physically form a hairpin
+    the span contain enough nucleotides to physically form a hairpin
     (n_stem_cols + MIN_HAIRPIN_LOOP, the steric minimum; Woodson 2008,
-    doi:10.1146/annurev.physchem.59.032607.093743)? below that: definite genuine
-    loss. at or above: NOT proof the arm is present, just not ruled out by
-    volume alone -- a CM with wide insert-state capacity can pass this on
-    unrelated leftover sequence alone (see arm_is_threading_failure, the
-    required second-stage check that actually folds the span).
-    returns False for definite genuine loss, True to proceed to that check."""
+    doi:10.1146/annurev.physchem.59.032607.093743)? False here means definite
+    genuine loss. True is not proof of a real arm, just not ruled out by
+    volume alone -- see arm_is_threading_failure for the required 2nd check."""
     start, end = elem["span"]
     n_nts = sum(1 for c in aligned_seq[start:end] if c not in "-.")
     return n_nts >= len(elem["stem_cols"]) + MIN_HAIRPIN_LOOP
 
 
 def _arm_full_span_subseq_and_fold(aligned_seq, final_seq, elem):
-    """extract the FULL non-gap span (matched columns + inserts together) and
+    """extract the FULL non-gap span (matched + insert columns together) and
     fold it with RNAfold MFE. full span, not insert-only: a real arm's
-    sequence isn't always mis-threaded into insert (lowercase) columns -- it
-    can land in the slot's own matched columns too (e.g. human mt-Val's T-arm
-    under TRNAinf-bact.cm). since this is only reached for a slot classify_arm_loss
-    already flagged absent (n_pairs below MIN_STEM_PAIRS), those matched columns
-    have no real base pairs to protect, so folding the whole span is safe.
-    used both to detect a hairpin (arm_is_threading_failure) and to source the
-    patch (patch_threading_failure_arm) -- one extraction, two consumers.
-    returns (ungapped_positions, arm_ss), or (None, None) if there's too
-    little sequence to fold (< MIN_HAIRPIN_LOOP + 2 nt)."""
+    sequence can land in the slot's own matched columns too (e.g. human
+    mt-Val's T-arm under TRNAinf-bact.cm), which are safe to fold over since
+    this slot was already flagged absent (n_pairs below MIN_STEM_PAIRS) --
+    no real base pairs there to protect. shared by arm_is_threading_failure
+    (detect) and patch_threading_failure_arm (source the patch).
+    returns (ungapped_positions, arm_ss), or (None, None) if too little
+    sequence to fold (< MIN_HAIRPIN_LOOP + 2 nt)."""
     span_start, span_end = elem["span"]
     ungapped_positions, ungapped_idx = [], 0
     for gapped_idx, c in enumerate(aligned_seq):
@@ -666,33 +636,24 @@ def _arm_full_span_subseq_and_fold(aligned_seq, final_seq, elem):
 
 def arm_is_threading_failure(aligned_seq, final_seq, elem):
     """second-stage check, run only after arm_span_has_enough_sequence passes:
-    does the span actually fold as a hairpin? that raw-count check can be
-    fooled by a CM with wide insert-state capacity (e.g. a whole-family
-    bacterial CM) -- a genuinely absent arm's span can pass on volume alone,
-    filled with unrelated leftover sequence (e.g. 3' trailer) that folds as
-    nothing. folding the whole span here is a much stronger positive signal.
-    True: RNAfold found a hairpin -- real, recoverable arm.
-    False: nothing folds -- genuine loss despite passing the count check."""
+    does the span actually fold as a hairpin? needed because a CM with wide
+    insert-state capacity can pass the raw-count check on unrelated leftover
+    sequence alone. True: real, recoverable arm. False: genuine loss despite
+    passing the count check."""
     _, arm_ss = _arm_full_span_subseq_and_fold(aligned_seq, final_seq, elem)
     return arm_ss is not None and "(" in arm_ss
 
 
 def patch_threading_failure_arm(aligned_seq, final_seq, final_ss, elem):
-    """recover arm structure for a CM threading failure: arm present but mis-threaded
-    within elem's span (matched columns, insert columns, or both -- see
-    _arm_full_span_subseq_and_fold). called only once arm_is_threading_failure has
-    confirmed a real hairpin exists there. the rest of final_ss (from the canonical
-    CM) is already correct, so we splice in ONLY this span's own RNAfold fold rather
-    than refolding the whole molecule -- full-sequence RNAfold on a mt-tRNA is
-    unreliable (tertiary contacts, base modifications; Helm 2006,
-    doi:10.1093/nar/gkl348), but a short isolated span (13-20nt) is fine. elem was
-    already flagged arm-absent (n_pairs below MIN_STEM_PAIRS), so its matched
-    columns have no real base pairs to protect either -- safe to overwrite.
-    safety: every bracket in the fold must target a '.' in final_ss, or the
-    patch is aborted -- placing an open whose matching close is blocked leaves
-    a dangling bracket RNA.ptable() would reject.
-    returns patched final_ss, or the original if: no stem found, a bracket
-    conflicts with existing structure, or the patch is unbalanced (safety net)."""
+    """recover arm structure for a confirmed CM threading failure (called only
+    after arm_is_threading_failure): splice elem's own RNAfold fold into
+    final_ss rather than refolding the whole molecule -- full-sequence RNAfold
+    on a mt-tRNA is unreliable (tertiary contacts, modified bases; Helm 2006,
+    doi:10.1093/nar/gkl348), but a short isolated span (13-20nt) is fine.
+    safety: every bracket in the fold must target a '.' in final_ss or the
+    patch is aborted, since a rejected close leaves its open dangling.
+    returns patched final_ss, or the original on no fold / bracket conflict /
+    unbalanced result (safety net)."""
     ungapped_positions, arm_ss = _arm_full_span_subseq_and_fold(aligned_seq, final_seq, elem)
 
     if ungapped_positions is None or "(" not in arm_ss:
@@ -763,40 +724,26 @@ def _routing_result(final_alignment, cm_used, diagnosis, rerouted=False, threadi
 
 
 def select_cm_and_align(header, seq, canonical_cm_tiers, armless_cm_index):
-    """top-level CM selection for one sequence. routing order:
-      1 try each canonical CM tier in order (e.g. bacterial whole-family CM,
-        then a metazoan per-AA directory); align + diagnose against each and
-        take the first whose anticodon anchors unambiguously. a tier that
-        doesn't apply to this aa (per-AA dict with no matching entry) or
-        whose cmalign fails outright is skipped. if no tier anchors cleanly,
-        fall back to the first tier that produced any alignment at all --
-        same graceful degradation as the old single-canonical-CM behaviour.
-        this exists because a CM built for the wrong clade can lack the
-        capacity to model a divergent loop (e.g. an unusually long variable
-        loop), causing cmalign to thread the overflow into an adjacent arm's
-        insert states and break anticodon anchoring entirely -- a different
-        CM (e.g. bacterial, given mitochondria's endosymbiotic origin) may
-        thread the same sequence correctly. selection is never by alignment
-        score/E-value across tiers, only by whether the anchor is clean --
-        see module docstring section 2 for why cross-model score comparison
-        is invalid.
-      2 if no arm missing (or only variable arm): return canonical alignment.
-      3 if D-arm (no register shift) or T-arm flagged absent (classify_arm_loss's
-        absent(), a soft MIN_STEM_PAIRS-based signal): two checks, both required
-        to call it a threading failure rather than genuine loss --
-        arm_span_has_enough_sequence (fast, hard: enough nt to physically form
-        a hairpin?) then arm_is_threading_failure (RNAfold: does it actually
-        fold as one?). failing either -> genuine loss, proceed to rerouting.
-        passing both -> keep canonical alignment, patch via RNAfold instead.
-        D-arm loss found via register shift (offset>0) is trusted directly and
-        skips both checks -- see the comment below.
-      4 reroute: resolve_armless_cm with anticodon-based isoacceptor disambiguation.
-      5 no matching armless CM: warn and return canonical alignment.
-    canonical_cm_tiers is normally a list of tiers (each a .cm path applying to
-    every sequence, or a {aa_code: path} dict from index_canonical_cms), tried
-    in order; a bare path string or dict is also accepted and wrapped as a
-    single-tier list, for callers (and tests) that only have one CM.
-    returns dict: final_alignment, cm_used, diagnosis, rerouted, threading_failure_elem."""
+    """top-level CM selection for one sequence.
+    1. try each canonical CM tier in order (e.g. bacterial whole-family CM
+       first -- mitochondria's endosymbiotic origin -- then a metazoan per-AA
+       directory); first clean anticodon anchor wins. never by score/E-value
+       across tiers (module docstring section 2). a tier that doesn't apply to
+       this aa, or whose cmalign fails, is skipped; if none anchor cleanly,
+       fall back to the first tier that aligned at all.
+    2. no arm missing (or only variable arm): return the canonical alignment.
+    3. D-arm (no register shift) or T-arm flagged absent: cross-check with
+       arm_span_has_enough_sequence then arm_is_threading_failure before
+       trusting it; passing both means patch via RNAfold instead of
+       rerouting. D-arm via register shift (offset>0) skips this and is
+       trusted directly -- its span holds sequence displaced by the shift
+       itself, not the D-arm's own (or absent) content, so both checks would
+       false-positive there.
+    4. genuine loss: reroute via resolve_armless_cm (anticodon-disambiguated);
+       no matching armless CM: warn and keep the canonical alignment.
+    canonical_cm_tiers: list of tiers (path, or {aa_code: path} dict), or a
+    bare path/dict wrapped as a single tier. returns dict: final_alignment,
+    cm_used, diagnosis, rerouted, threading_failure_elem."""
     if isinstance(canonical_cm_tiers, (str, dict)):
         canonical_cm_tiers = [canonical_cm_tiers]
 
@@ -1072,7 +1019,9 @@ def process_one_record(args):
         return {"header": header, "rows": [], "summary": "CMALIGN_FAILED"}
 
     final_seq, final_ss = finalize_structure(alignment)
+    cm_only_ss = None
     if routing.get("threading_failure_elem"):
+        cm_only_ss = final_ss
         final_ss = patch_threading_failure_arm(
             alignment["aligned_seq"], final_seq, final_ss,
             routing["threading_failure_elem"]
@@ -1122,89 +1071,206 @@ def process_one_record(args):
 
     logger.info(f"{header}: {summary}  [{diagnosis.get('call')}]")
     return {"header": header, "rows": rows, "summary": summary,
-            "seq": final_seq, "ss": final_ss, "sprinzl": sprinzl}
+            "seq": final_seq, "ss": final_ss, "sprinzl": sprinzl,
+            "cm_only_ss": cm_only_ss}
 
 
 # --- plotting (optional, --plot) ---
+#
+# renders each record's OWN final structure (final_ss -- sprinx's arm-loss/
+# threading-failure diagnosis already baked in) via R2DT's template-free
+# "stockholm" mode, not a structure R2DT would re-derive itself from its own
+# template library (which could silently disagree with sprinx's own call).
+# R2DT only accepts a real multi-sequence alignment as input, and these
+# records aren't aligned to each other at all, so build_r2dt_stockholm fakes
+# one: every record's sequence is concatenated end-to-end into a single row,
+# with one #=GC structureID region marking each record's own column span --
+# see https://docs.r2dt.bio for the annotation format.
 
-def naview_coords(ss):
-    """2D coordinates from ViennaRNA NAVIEW layout algorithm."""
-    RNA.cvar.rna_plot_type = 1
-    obj = RNA.get_xy_coordinates(ss)
-    return np.array([[obj.get(i).X, obj.get(i).Y] for i in range(len(ss))])
-
-
-def orient_acceptor_north(coords, acceptor_idx, anticodon_loop_idx):
-    """rotate layout so acceptor stem points up, anticodon loop points down."""
-    if not acceptor_idx or not anticodon_loop_idx:
-        return coords
-    vec = coords[acceptor_idx].mean(0) - coords[anticodon_loop_idx].mean(0)
-    angle = np.pi / 2 - np.arctan2(vec[1], vec[0])
-    rot = np.array([[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]])
-    centre = coords.mean(0)
-    return (coords - centre) @ rot.T + centre
+R2DT_DEFAULT_IMAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib", "r2dt")
 
 
-def draw_trna(ax, seq, ss, sprinzl, title, label_step=5, fontsize=8):
-    """backbone, base-pair lines, nucleotide letters, and Sprinzl labels on ax."""
-    pairs = pair_table(ss)
-    topo = parse_topology(ss)
-    coords = naview_coords(ss)
-    anticodon_loop = []
-    for stem5 in topo["inner_stems"]:
-        anticodon_loop = list(range(stem5[-1] + 1, pairs[stem5[-1]]))
-    coords = orient_acceptor_north(coords, topo["acceptor_5"] + topo["acceptor_3"], anticodon_loop)
-
-    for i in range(len(seq) - 1):
-        ax.plot(*coords[[i, i + 1]].T, "-", color="#c0c0c0", lw=0.8, zorder=1)
-    for i, j in pairs.items():
-        if i < j:
-            ax.plot(*coords[[i, j]].T, "-", color="#909090", lw=0.7, alpha=0.7, zorder=1)
-    for i, base in enumerate(seq):
-        ax.text(*coords[i], base, ha="center", va="center", fontsize=fontsize,
-                fontweight="bold", color=NT_COLOUR.get(base, "#555555"),
-                fontfamily="monospace", zorder=3)
-        label = sprinzl.get(i, "")
-        # label every Nth integer position; always show lettered inserts (17a, 60A, ...)
-        show = label and (
-            not label[:-1].isdigit()
-            or int(re.match(r"\d+", label).group()) % label_step == 0
-            or label == "1"
-        )
-        if show:
-            ax.text(coords[i, 0], coords[i, 1] - 2.3, label, ha="center", va="top",
-                    fontsize=fontsize * 0.6, color="#333333", zorder=4)
-
-    ax.set_aspect("equal")
-    ax.axis("off")
-    ax.set_title(title, fontsize=fontsize + 2, pad=6)
-    margin = 5
-    ax.set_xlim(coords[:, 0].min() - margin, coords[:, 0].max() + margin)
-    ax.set_ylim(coords[:, 1].min() - margin, coords[:, 1].max() + margin)
+def _sanitize_r2dt_name(text, maxlen=40):
+    """structureID/regionID names may not contain '|' or '.' (the annotation
+    line's own delimiters); collapse anything else to '_' and truncate."""
+    safe = re.sub(r"[^A-Za-z0-9]+", "_", text).strip("_")
+    return safe[:maxlen] or "seq"
 
 
-def make_plot(results, out_path, ncols=4, label_step=5):
-    """grid of one cloverleaf per successfully-processed record; failed records skipped.
-    plotted in header order: species (taxon field) first, then tRNA (aa field), so
-    isoacceptors of the same species group together and species cluster in the grid."""
+def _r2dt_id_line(segments):
+    """build one #=GC structureID/regionID line: '|' marks each segment's first
+    column, the segment's name fills the following columns, '.' pads the rest --
+    the format R2DT's stockholm parser expects (see module comment above)."""
+    total = sum(length for _, length in segments)
+    line = ["."] * total
+    pos = 0
+    for name, length in segments:
+        line[pos] = "|"
+        for i, ch in enumerate(name[:length - 1]):
+            line[pos + 1 + i] = ch
+        pos += length
+    line[-1] = "|"
+    return "".join(line)
+
+
+def build_r2dt_stockholm(plotted):
+    """records (each with 'header', 'seq', 'ss') -> (Stockholm text, region
+    names) with one structureID region per record, in the same order as
+    `plotted`. regionID is the aa field, so R2DT's --color-by region groups
+    isoacceptors under one colour. names are de-duplicated with a numeric
+    suffix since sanitizing distinct headers can collide."""
+    names, seen = [], {}
+    for r in plotted:
+        base = _sanitize_r2dt_name(r["header"])
+        n = seen.get(base, 0)
+        seen[base] = n + 1
+        names.append(f"{base}_{n}" if n else base)
+
+    concat_seq = "".join(r["seq"] for r in plotted)
+    concat_ss = "".join(r["ss"] for r in plotted)
+    structure_id = _r2dt_id_line([(name, len(r["seq"])) for name, r in zip(names, plotted)])
+    region_id = _r2dt_id_line([(header_to_aa(r["header"]) or "na", len(r["seq"])) for r in plotted])
+
+    sto_text = "\n".join([
+        "# STOCKHOLM 1.0", "",
+        f"seqs {concat_seq}", "",
+        f"#=GC SS_cons     {concat_ss}",
+        f"#=GC structureID {structure_id}",
+        f"#=GC regionID    {region_id}",
+        "//",
+    ]) + "\n"
+    return sto_text, names
+
+
+def _cm_only_plot_path(path):
+    """cloverleaves.svg -> cloverleaves_CMonly.svg, for the pre-RNAfold-patch
+    comparison plot alongside the regular one."""
+    root, ext = os.path.splitext(path)
+    return f"{root}_CMonly{ext}"
+
+
+SVG_NS = "http://www.w3.org/2000/svg"
+ET.register_namespace("", SVG_NS)
+
+
+def _grid_svg(panels, ncols, gap=20, caption_height=32):
+    """panels: list of (svg_root_element, width, height, caption). arranges
+    them into a real grid (ncols per row), unlike R2DT's own --stitch (which
+    only lays panels left-to-right in a single row -- unusable past a handful
+    of sequences, since the file just gets wider without bound). cell size is
+    uniform (max panel width/height across all panels) so rows/columns stay
+    aligned; each panel keeps its own native size, placed top-left in its
+    cell. nested <svg> elements are SVG's own mechanism for embedding one
+    diagram inside another at a given position/size -- no rasterization
+    needed to compose them."""
+    cell_w = max(w for _, w, _, _ in panels) + gap
+    cell_h = max(h for _, _, h, _ in panels) + gap + caption_height
+    nrows = -(-len(panels) // ncols)
+
+    root = ET.Element(f"{{{SVG_NS}}}svg", {
+        "width": str(ncols * cell_w), "height": str(nrows * cell_h),
+    })
+    for i, (panel, w, h, caption) in enumerate(panels):
+        row, col = divmod(i, ncols)
+        x, y = col * cell_w + gap / 2, row * cell_h + caption_height
+        text = ET.SubElement(root, f"{{{SVG_NS}}}text", {
+            "x": str(x), "y": str(row * cell_h + caption_height * 0.7),
+            "font-family": "monospace", "font-size": "12",
+        })
+        text.text = caption[:60]
+        panel.set("x", str(x))
+        panel.set("y", str(y))
+        root.append(panel)
+    return ET.ElementTree(root)
+
+
+def make_plot(results, out_path, r2dt_image=R2DT_DEFAULT_IMAGE, ncols=6):
+    """R2DT-rendered 2D diagram, one panel per successfully-processed record,
+    arranged into our own grid (see _grid_svg -- R2DT's own stitching doesn't
+    wrap into rows). plotted in header order: species (taxon field) first,
+    then tRNA (aa field), so isoacceptors of the same species group together
+    and species cluster in the figure. runs R2DT via its Singularity image
+    (see README for setup); failures are logged and skipped, not raised,
+    since --plot is a sanity-check convenience, not the tool's actual output."""
     plotted = [r for r in results if r["rows"]]
     if not plotted:
         logger.warning("nothing to plot -- every record failed upstream")
         return
     plotted.sort(key=lambda r: (header_to_taxon(r["header"]) or "",
                                 header_to_aa(r["header"]) or "", r["header"]))
-    ncols = min(ncols, len(plotted))
-    nrows = -(-len(plotted) // ncols)
-    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * 5, nrows * 6))
-    axes = np.atleast_1d(axes).flatten()
-    for ax, r in zip(axes, plotted):
-        draw_trna(ax, r["seq"], r["ss"], r["sprinzl"],
-                  title=f"{r['header']}\n{r['summary']}", label_step=label_step)
-    for ax in axes[len(plotted):]:
-        ax.axis("off")
-    plt.tight_layout()
-    fig.savefig(out_path, dpi=200, bbox_inches="tight")
-    plt.close(fig)
+
+    sto_text, names = build_r2dt_stockholm(plotted)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with open(os.path.join(tmpdir, "sprinx_plot.sto"), "w") as f:
+            f.write(sto_text)
+        cmd = ["singularity", "exec", "-B", f"{tmpdir}:/rna/r2dt/temp", r2dt_image,
+               "r2dt.py", "stockholm", "/rna/r2dt/temp/sprinx_plot.sto",
+               "/rna/r2dt/temp/out", "--no-stitch"]
+        _, stderr, rc = run(cmd)
+        if rc != 0:
+            logger.warning(f"R2DT plotting failed: {stderr.strip()[:500]}")
+            return
+
+        svg_dir = os.path.join(tmpdir, "out", "results", "svg")
+        panels = []
+        for name, r in zip(names, plotted):
+            candidates = glob.glob(os.path.join(svg_dir, f"{name}_*.svg"))
+            if not candidates:
+                logger.warning(f"{r['header']}: R2DT produced no diagram for this sequence, skipping")
+                continue
+            root = ET.parse(candidates[0]).getroot()
+            width, height = float(root.get("width")), float(root.get("height"))
+            panels.append((root, width, height, f"{r['header']} {r['summary']}"))
+
+        if not panels:
+            logger.warning("R2DT plotting produced no SVG output")
+            return
+
+        grid_path = os.path.join(tmpdir, "grid.svg")
+        _grid_svg(panels, ncols).write(grid_path)
+
+        ext = os.path.splitext(out_path)[1].lower()
+        if ext == ".svg":
+            shutil.copy(grid_path, out_path)
+        else:
+            _convert_svg(grid_path, out_path, ext)
+
+
+_SVG_CONVERTERS = {".png": cairosvg.svg2png, ".pdf": cairosvg.svg2pdf}
+
+
+# cairo's hard surface-size limit is ~32767px/side; a wide stitched plot (many
+# sequences) can exceed that at scale=2.0, so the PNG scale is capped to keep
+# the longer side under this, well clear of the real limit.
+MAX_PNG_DIM = 16000
+
+
+def _svg_intrinsic_size(svg_path):
+    """(width, height) in px from an SVG's own width/height attributes."""
+    root = ET.parse(svg_path).getroot()
+    return float(root.get("width")), float(root.get("height"))
+
+
+def _convert_svg(svg_path, out_path, ext):
+    """R2DT only emits SVG; convert to whatever format --plot asked for via
+    cairosvg. .png (the previous matplotlib-based renderer's only output
+    format) and .pdf are supported; anything else falls back to .svg content
+    copied as-is under the requested name, since silently writing nothing
+    would be worse than an oddly-named SVG."""
+    convert = _SVG_CONVERTERS.get(ext)
+    if convert is None:
+        logger.warning(f"--plot: {ext} not supported for R2DT output (only .svg, "
+                       f".png, .pdf); writing raw SVG to {out_path} instead")
+        shutil.copy(svg_path, out_path)
+        return
+    kwargs = {}
+    if ext == ".png":
+        width, height = _svg_intrinsic_size(svg_path)
+        kwargs = {"scale": min(2.0, MAX_PNG_DIM / max(width, height, 1))}
+    try:
+        convert(url=svg_path, write_to=out_path, **kwargs)
+    except Exception as e:
+        logger.warning(f"SVG->{ext} conversion failed: {e}")
 
 
 # --- main ---
@@ -1227,11 +1293,13 @@ def main():
                              "armless_trn{AA}_wo_{d,t,d_and_t}.cm files")
     parser.add_argument("--out", default="sprinzl_mapping.tsv",
                         help="output TSV path (default: sprinzl_mapping.tsv)")
-    parser.add_argument("--plot", default=None, metavar="PNG",
-                        help="path for PNG cloverleaf grid (omit to skip plotting)")
-    parser.add_argument("--ncols", type=int, default=4, help="plot grid columns")
-    parser.add_argument("--label-step", type=int, default=5,
-                        help="plot: label every Nth Sprinzl position")
+    parser.add_argument("--plot", default=None, metavar="SVG_OR_PNG_OR_PDF",
+                        help="path for R2DT-rendered 2D diagram, one panel per "
+                             "sequence arranged in a grid; format is chosen by "
+                             "extension (.svg, .png, .pdf) (omit to skip plotting)")
+    parser.add_argument("--ncols", type=int, default=6, help="plot grid columns")
+    parser.add_argument("--r2dt-image", default=R2DT_DEFAULT_IMAGE, metavar="PATH",
+                        help=f"R2DT Singularity image (default: {R2DT_DEFAULT_IMAGE})")
     parser.add_argument("-p", "--processes", type=int, default=4,
                         help="worker processes (default: 4)")
     parser.add_argument("--debug", action="store_true",
@@ -1284,8 +1352,17 @@ def main():
     logger.info(f"table: {args.out}")
 
     if args.plot:
-        make_plot(results, args.plot, ncols=args.ncols, label_step=args.label_step)
+        make_plot(results, args.plot, r2dt_image=args.r2dt_image, ncols=args.ncols)
         logger.info(f"plot:  {args.plot}")
+
+        # sequences RNAfold-patched for a CM threading failure: also plot the
+        # CM-only structure (pre-patch) side by side, so the patch's effect is
+        # visible rather than assumed.
+        cm_only_results = [{**r, "ss": r["cm_only_ss"]} for r in results if r.get("cm_only_ss")]
+        if cm_only_results:
+            cm_only_path = _cm_only_plot_path(args.plot)
+            make_plot(cm_only_results, cm_only_path, r2dt_image=args.r2dt_image, ncols=args.ncols)
+            logger.info(f"plot (CM-only, pre-RNAfold-patch): {cm_only_path}")
 
 
 if __name__ == "__main__":
