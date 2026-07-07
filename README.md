@@ -100,6 +100,13 @@ sprinx.py                   CLI, alignment, arm-loss classification, Sprinzl
 conftest.py                  pytest setup, loads .env / SPRINX_* vars for integration tests
 env.example                  template for .env
 data/                        example FASTA, canonical CM, armless CM library
+  mitofinder_models/           canonical CMs from MitoFinder, old INFERNAL-1 [1.0] format;
+                                cmalign (Infernal 1.1.x) refuses these outright
+  mitofinder_models_converted/ same CMs reformatted to current INFERNAL1/a via
+                                `cmconvert -a`, one file in, one file out, same filename;
+                                originals in mitofinder_models/ are untouched -- regenerate
+                                with: `for f in data/mitofinder_models/*.cm; do
+                                cmconvert -a "$f" > "data/mitofinder_models_converted/$(basename "$f")"; done`
 tests/
   test_sprinx_unit.py          unit tests, run anywhere
   test_sprinx_integration.py   runs real cmalign / RNAfold end to end
