@@ -66,11 +66,24 @@ NAVIEW. Useful for sanity-checking a run, not part of the actual output.
 - Python 3, with `numpy`, `pandas`, `matplotlib`, `RNA` (ViennaRNA), `forgi`,
   `biopython`, `loguru`, `scipy`.
 - Infernal, with `cmalign` on `PATH`.
-- A canonical mt-tRNA CM, e.g. `TRNAinf-euk.cm`. `--canonical-cm` also accepts a
-  directory of `{label}_{AA}.cm` files (e.g. `Metazoa_A.cm`), in which case the
-  canonical CM is chosen per-sequence by the header's aa field instead of one
-  fixed CM for every sequence; `label` (clade or any prefix) is ignored. See
+- One or more canonical mt-tRNA CMs, e.g. `TRNAinf-euk.cm`. `--canonical-cm`
+  takes multiple sources tried in priority order per sequence: the first
+  source whose alignment anchors the anticodon unambiguously wins. Each
+  source is either a single CM file (applies to every sequence, e.g. a
+  whole-family CM like `TRNAinf-bact.cm`) or a directory of `{label}_{AA}.cm`
+  files (e.g. `Metazoa_A.cm`), in which case the CM is chosen per-sequence by
+  the header's aa field; `label` (clade or any prefix) is ignored. See
   `data/full_tRNAs_mitofinder_tRNAScanSE/`.
+
+  This matters because a CM built for the wrong clade can lack the capacity
+  to model a divergent loop (e.g. an unusually long variable loop before the
+  T-stem); `cmalign` then threads the overflow into an adjacent arm's insert
+  states and anticodon anchoring breaks entirely. Since mitochondria are of
+  bacterial (endosymbiotic) origin, putting a bacterial whole-family CM ahead
+  of a metazoan-only one can recover sequences the metazoan CM alone
+  mis-threads -- selection is never by alignment score/E-value across tiers
+  (see "Why this exists" above for why that's invalid), only by whether the
+  anchor is clean.
 - Armless CMs named `armless_trn{AA}_wo_{d,t,d_and_t}.cm`, see `data/truncated_cm/`.
   This naming convention comes from Ozerova et al. 2024; the indexer matches on it
   directly and skips anything that doesn't fit rather than guessing.
@@ -96,6 +109,15 @@ python sprinx.py --fasta data/canonical.fa \
     --armless-cm-dir data/truncated_cm/ \
     --out output/canonical_mitofinder.sprinzl.tsv \
     --plot output/canonical_mitofinder.png
+
+# multiple --canonical-cm tiers, tried in order: bacterial whole-family CM first
+# (mitochondria's endosymbiotic origin), falling back to the metazoan per-AA
+# directory only for sequences the bacterial CM doesn't anchor cleanly
+python sprinx.py --fasta data/canonical.fa \
+    --canonical-cm data/full_tRNAs_mitofinder_tRNAScanSE/TRNAinf-bact.cm \
+                   data/full_tRNAs_mitofinder_tRNAScanSE \
+    --armless-cm-dir data/truncated_cm/ \
+    --out output/canonical_mitofinder.sprinzl.tsv
 ```
 
 Headers must be pipe-delimited as `id|aa|anticodon|taxon` (e.g.

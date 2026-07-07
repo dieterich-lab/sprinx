@@ -328,5 +328,130 @@ class TestSelectCmAndAlignIntegration:
             )
 
 
+DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
+METAZOA_Y_CM = os.path.join(DATA_DIR, "full_tRNAs_mitofinder_tRNAScanSE", "Metazoa_Y.cm")
+TRNAINF_BACT_CM = os.path.join(DATA_DIR, "full_tRNAs_mitofinder_tRNAScanSE", "TRNAinf-bact.cm")
+
+need_tiered_cm_fixtures = pytest.mark.skipif(
+    not (CMALIGN_OK and os.path.exists(METAZOA_Y_CM) and os.path.exists(TRNAINF_BACT_CM)),
+    reason="requires: cmalign in PATH, data/full_tRNAs_mitofinder_tRNAScanSE/{Metazoa_Y,TRNAinf-bact}.cm"
+)
+
+
+class TestSelectCmAndAlignTieredCanonical:
+    """tiered canonical-CM search: select_cm_and_align tries each --canonical-cm
+    source in order and takes the first whose anticodon anchors unambiguously.
+    fixture: S. cerevisiae mt-tRNA-Tyr (mtdbD00125566) has a longer-than-typical
+    variable loop that Metazoa_Y.cm (metazoan-only) can't model -- cmalign threads
+    the overflow into the T-loop's insert states, producing an ambiguous anticodon
+    match and UNANCHORED. TRNAinf-bact.cm (bacterial, relevant given mitochondria's
+    endosymbiotic origin) threads it correctly. confirmed manually during the
+    investigation that motivated this feature; see git history for sprinx.py."""
+
+    SCEREVISIAE_TYR_HEADER = "mtdbD00125566|Tyr|GUA|Saccharomyces cerevisiae"
+    SCEREVISIAE_TYR_SEQ = (
+        "GGAGGGAUUUUCAAUGUUGGUAGUUGGAGUUGAGCUGUAAACUCAAUGACUUAGGUCUU"
+        "CAUAGGUUCAAUUCCUAUUCCCUUCA"
+    )
+
+    @need_tiered_cm_fixtures
+    def test_metazoan_only_fails_to_anchor(self):
+        """sanity check on the fixture itself: Metazoa_Y.cm alone must NOT anchor
+        this sequence cleanly (if it did, the tiered fallback wouldn't be needed)."""
+        routing = sprinx.select_cm_and_align(
+            self.SCEREVISIAE_TYR_HEADER, self.SCEREVISIAE_TYR_SEQ, METAZOA_Y_CM, {}
+        )
+        assert routing["diagnosis"]["anticodon_stem_index"] is None, (
+            "expected Metazoa_Y.cm alone to fail anchoring for this fixture; "
+            "if it now anchors cleanly, the tiered-search motivation no longer applies"
+        )
+
+    @need_tiered_cm_fixtures
+    def test_bacterial_tier_used_when_metazoan_tier_fails(self):
+        """given [Metazoa_Y.cm, TRNAinf-bact.cm] in that order, the bacterial tier
+        must be the one actually used, since the metazoan tier doesn't anchor."""
+        routing = sprinx.select_cm_and_align(
+            self.SCEREVISIAE_TYR_HEADER, self.SCEREVISIAE_TYR_SEQ,
+            [METAZOA_Y_CM, TRNAINF_BACT_CM], {}
+        )
+        assert routing["diagnosis"]["anticodon_stem_index"] is not None
+        assert os.path.basename(routing["cm_used"]) == "TRNAinf-bact.cm", (
+            f"expected fallback to TRNAinf-bact.cm; got {routing['cm_used']}"
+        )
+
+
+def _load_fasta_file(path):
+    """parse a standalone FASTA file (not a bundle block) into {header: seq}."""
+    seqs = {}
+    cur = None
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.rstrip("\n")
+            if line.startswith(">"):
+                cur = line[1:].strip()
+                seqs[cur] = ""
+            elif cur:
+                seqs[cur] += line.strip().upper().replace("T", "U")
+    return seqs
+
+
+TRUNCATED_CM_DIR = os.path.join(DATA_DIR, "truncated_cm")
+
+need_bact_armless_fixtures = pytest.mark.skipif(
+    not (CMALIGN_OK and os.path.exists(TRNAINF_BACT_CM) and os.path.isdir(TRUNCATED_CM_DIR)),
+    reason="requires: cmalign in PATH, TRNAinf-bact.cm, data/truncated_cm/"
+)
+
+
+class TestBacterialCmArmLossFixes:
+    """regression tests for two bugs found while adding TRNAinf-bact.cm as a
+    canonical-CM tier: it models an extra variable-arm stem the metazoan CMs
+    don't, which broke two detection paths (see git history for sprinx.py):
+      - D-arm loss WITHOUT a register shift (classify_arm_loss checking the
+        D-arm's own slot directly, gated by MIN_STEM_PAIRS).
+      - T-arm loss where arm_span_has_enough_sequence's raw non-gap count is
+        fooled by unrelated leftover sequence filling the wide insert
+        capacity (arm_is_threading_failure's full-span RNAfold check catches
+        this -- see its regression test in test_sprinx_unit.py).
+    every sequence in data/{D,T}_armless.fa is ground-truth armless, so all
+    of them must be rerouted when TRNAinf-bact.cm is the only canonical tier."""
+
+    @need_bact_armless_fixtures
+    def test_all_d_armless_fixtures_rerouted(self):
+        armless_index = sprinx.index_armless_cms(TRUNCATED_CM_DIR)
+        seqs = _load_fasta_file(os.path.join(DATA_DIR, "D_armless.fa"))
+        not_rerouted = []
+        for header, seq in seqs.items():
+            routing = sprinx.select_cm_and_align(header, seq, TRNAINF_BACT_CM, armless_index)
+            if not routing["rerouted"]:
+                not_rerouted.append((header, routing["diagnosis"]["call"]))
+        assert not_rerouted == [], f"D-armless sequences not rerouted: {not_rerouted}"
+
+    @need_bact_armless_fixtures
+    def test_all_t_armless_fixtures_rerouted(self):
+        armless_index = sprinx.index_armless_cms(TRUNCATED_CM_DIR)
+        seqs = _load_fasta_file(os.path.join(DATA_DIR, "T_armless.fa"))
+        not_rerouted = []
+        for header, seq in seqs.items():
+            routing = sprinx.select_cm_and_align(header, seq, TRNAINF_BACT_CM, armless_index)
+            if not routing["rerouted"]:
+                not_rerouted.append((header, routing["diagnosis"]["call"]))
+        assert not_rerouted == [], f"T-armless sequences not rerouted: {not_rerouted}"
+
+
+class TestResolveCanonicalForTier:
+
+    def test_string_tier_applies_unconditionally(self):
+        assert sprinx._resolve_canonical_for_tier("any|header|here|x", "/some/path.cm") == "/some/path.cm"
+
+    def test_dict_tier_resolves_by_aa(self):
+        tier = {"A": "/models/Ala.cm", "V": "/models/Val.cm"}
+        assert sprinx._resolve_canonical_for_tier("id|Ala|UGC|taxon", tier) == "/models/Ala.cm"
+
+    def test_dict_tier_returns_none_for_missing_aa(self):
+        tier = {"A": "/models/Ala.cm"}
+        assert sprinx._resolve_canonical_for_tier("id|Val|UAC|taxon", tier) is None
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))
