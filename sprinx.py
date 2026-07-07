@@ -229,6 +229,12 @@ def header_to_aa(header):
     return fields[1].strip() if len(fields) >= 2 and fields[1].strip() else None
 
 
+def header_to_taxon(header):
+    """return the raw taxon/species field (fourth pipe-delimited field) or None."""
+    fields = header.split("|")
+    return fields[3].strip() if len(fields) >= 4 and fields[3].strip() else None
+
+
 # --- CM library ---
 
 def find_cm_files(cm_dir):
@@ -1063,11 +1069,15 @@ def draw_trna(ax, seq, ss, sprinzl, title, label_step=5, fontsize=8):
 
 
 def make_plot(results, out_path, ncols=4, label_step=5):
-    """grid of one cloverleaf per successfully-processed record; failed records skipped."""
+    """grid of one cloverleaf per successfully-processed record; failed records skipped.
+    plotted in header order: species (taxon field) first, then tRNA (aa field), so
+    isoacceptors of the same species group together and species cluster in the grid."""
     plotted = [r for r in results if r["rows"]]
     if not plotted:
         logger.warning("nothing to plot -- every record failed upstream")
         return
+    plotted.sort(key=lambda r: (header_to_taxon(r["header"]) or "",
+                                header_to_aa(r["header"]) or "", r["header"]))
     ncols = min(ncols, len(plotted))
     nrows = -(-len(plotted) // ncols)
     fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * 5, nrows * 6))
