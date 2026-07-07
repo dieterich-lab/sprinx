@@ -69,6 +69,9 @@ sprinx.py -- Sprinzl-coordinate annotation for mt-tRNAs.
      field 3 is the primary key for CM selection; field 2 only identifies aa.
    armless CM filenames: armless_trn{AA}_wo_{arm}.cm where arm is d, t, or d_and_t
    for doubly-armless (Ozerova et al. 2024, PMC11571959).
+   --canonical-cm also accepts a directory of {label}_{AA}.cm files (e.g.
+   Metazoan_P.cm); label (clade or any prefix) is ignored, selection is by AA
+   only, per-sequence, same as armless CM selection.
 
 5. output
    sprinzl_mapping.tsv: seq_id, seq_index, nucleotide, sprinzl_position, region,
@@ -79,6 +82,8 @@ usage:
       --armless-cm-dir cm_models/ --out-dir results/
   python sprinx.py --fasta seqs.fa --canonical-cm TRNAinf-euk.cm \\
       --armless-cm-dir cm_models/ --plot --processes 8 --debug
+  python sprinx.py --fasta seqs.fa --canonical-cm cm_models_by_clade/ \\
+      --armless-cm-dir cm_models/ --processes 8
 """
 
 import argparse
@@ -106,8 +111,15 @@ matplotlib.use("Agg")  # must precede any pyplot state; no display available
 
 warnings.filterwarnings("ignore")
 
-logger.remove()
-logger.add(sys.stderr, format="<level>{message}</level>", level="INFO")
+def _configure_logging(level):
+    """(re)point loguru at stderr with a bare message format. called at import
+    (INFO) and again wherever --debug is honoured (main(), each worker process
+    since multiprocessing forks/spawns fresh interpreters)."""
+    logger.remove()
+    logger.add(sys.stderr, format="<level>{message}</level>", level=level)
+
+
+_configure_logging("INFO")
 
 
 # --- constants: tRNA topology facts + Sprinzl coordinate system (PMC147216) ---
@@ -247,18 +259,52 @@ def find_cm_files(cm_dir):
     ]
 
 
-def index_armless_cms(cm_dir):
-    """scan cm_dir for armless_trn{AA}_wo_{arm}.cm files; return {(aa, arm): path}.
-    files that don't match the convention are skipped with a debug log rather than
-    guessed at -- mis-binning here would silently route to the wrong model."""
+def _scan_cm_files(cm_dir, pattern, key_fn, kind, exclude=None, warn_on_conflict=False):
+    """shared walk-and-regex-match skeleton for the two CM index builders below.
+    key_fn(match) turns a regex match into the index key; files that don't match
+    (or match `exclude`, used to keep armless CMs out of the canonical index)
+    are skipped with a debug log rather than guessed at -- mis-binning here would
+    silently route to the wrong model. warn_on_conflict logs when a later file
+    overwrites an earlier one under the same key, since that silently prefers
+    one file over another rather than erroring."""
     index = {}
     for path in find_cm_files(cm_dir):
-        m = ARMLESS_CM_RE.search(os.path.basename(path))
-        if m:
-            index[(m.group(1), m.group(2))] = path
-        else:
-            logger.debug(f"  not an armless CM by naming convention, skipping: {path}")
+        base = os.path.basename(path)
+        if exclude and exclude.search(base):
+            continue
+        m = pattern.search(base)
+        if not m:
+            logger.debug(f"  not a {kind} CM by naming convention, skipping: {path}")
+            continue
+        key = key_fn(m)
+        if warn_on_conflict and key in index and index[key] != path:
+            logger.warning(f"multiple {kind} CMs map to {key!r}: "
+                           f"using {path} (overriding {index[key]})")
+        index[key] = path
+    return index
+
+
+def index_armless_cms(cm_dir):
+    """scan cm_dir for armless_trn{AA}_wo_{arm}.cm files; return {(aa, arm): path}."""
+    index = _scan_cm_files(cm_dir, ARMLESS_CM_RE, lambda m: (m.group(1), m.group(2)), "armless")
     logger.info(f"indexed {len(index)} armless CMs: {sorted(f'{aa}/{arm}' for aa, arm in index)}")
+    return index
+
+
+# canonical CM filename regex: {label}_{AA}.cm, e.g. Metazoan_P.cm; label
+# (clade or any prefix) is ignored, only the AA code after the last "_" is used.
+CANONICAL_CM_RE = re.compile(r"^.+_(\w+)\.cm$")
+
+
+def index_canonical_cms(cm_dir):
+    """scan cm_dir for {label}_{AA}.cm canonical CM files; return {aa_code: path}.
+    label (e.g. clade) is ignored -- selection is by AA only. armless CM files
+    are excluded even though they also match the generic {x}_{y}.cm shape. if
+    the same AA code appears under multiple files, the last one found wins and
+    a warning is logged, since this silently picks one label/clade over another."""
+    index = _scan_cm_files(cm_dir, CANONICAL_CM_RE, lambda m: m.group(1), "canonical",
+                           exclude=ARMLESS_CM_RE, warn_on_conflict=True)
+    logger.info(f"indexed {len(index)} canonical CMs by aa: {sorted(index)}")
     return index
 
 
@@ -659,6 +705,13 @@ def resolve_armless_cm(header, seq, aa_code, missing_arm, anticodon, armless_cm_
     return candidates[0]
 
 
+def _routing_result(final_alignment, cm_used, diagnosis, rerouted=False, threading_failure_elem=None):
+    """assemble the dict select_cm_and_align returns at each of its exit points,
+    so the shape is defined once instead of copy-pasted per branch."""
+    return {"final_alignment": final_alignment, "cm_used": cm_used, "diagnosis": diagnosis,
+            "rerouted": rerouted, "threading_failure_elem": threading_failure_elem}
+
+
 def select_cm_and_align(header, seq, canonical_cm, armless_cm_index):
     """top-level CM selection for one sequence. routing order:
       1 canonical CM alignment + structural diagnosis.
@@ -669,22 +722,17 @@ def select_cm_and_align(header, seq, canonical_cm, armless_cm_index):
            too few: genuine arm loss; proceed to rerouting.
       4 reroute: resolve_armless_cm with anticodon-based isoacceptor disambiguation.
       5 no matching armless CM: warn and return canonical alignment.
-    returns dict: final_alignment, cm_used, diagnosis, rerouted, reroute_attempt,
-    rnafold_ss (always None, api compat), threading_failure_elem."""
+    returns dict: final_alignment, cm_used, diagnosis, rerouted, threading_failure_elem."""
     canonical_alignment = cmalign_one(header, seq, canonical_cm)
     if canonical_alignment is None:
-        return {"final_alignment": None, "cm_used": None, "diagnosis": None,
-                "rerouted": False, "reroute_attempt": None, "rnafold_ss": None,
-                "threading_failure_elem": None}
+        return _routing_result(None, None, None)
 
     diagnosis = classify_arm_loss(header, canonical_alignment["aligned_seq"],
                                   canonical_alignment["ss_cons"])
     missing_arm = diagnosis["missing_arm"]
 
     if missing_arm not in ("d", "t", "d_and_t"):
-        return {"final_alignment": canonical_alignment, "cm_used": canonical_cm,
-                "diagnosis": diagnosis, "rerouted": False, "reroute_attempt": None,
-                "rnafold_ss": None, "threading_failure_elem": None}
+        return _routing_result(canonical_alignment, canonical_cm, diagnosis)
 
     # step 3: threading failure cross-check, T-arm only.
     # T-arm n_pairs==0 has two causes: genuine loss vs arm mis-threaded into
@@ -702,9 +750,8 @@ def select_cm_and_align(header, seq, canonical_cm, armless_cm_index):
                 f"but span has enough sequence for a hairpin "
                 f"(CM threading failure, not genuine arm loss) -- patching via RNAfold"
             )
-            return {"final_alignment": canonical_alignment, "cm_used": canonical_cm,
-                    "diagnosis": diagnosis, "rerouted": False, "reroute_attempt": None,
-                    "rnafold_ss": None, "threading_failure_elem": t_elem}
+            return _routing_result(canonical_alignment, canonical_cm, diagnosis,
+                                    threading_failure_elem=t_elem)
 
     # genuine arm loss: reroute
     aa_code = aa_field_to_cm_code(header_to_aa(header), armless_cm_index.keys())
@@ -714,21 +761,15 @@ def select_cm_and_align(header, seq, canonical_cm, armless_cm_index):
     if armless_path is None:
         logger.warning(f"{header}: {missing_arm}-arm missing ({diagnosis['call']}) "
                        f"but no armless CM for aa_code={aa_code!r}; using canonical")
-        return {"final_alignment": canonical_alignment, "cm_used": canonical_cm,
-                "diagnosis": diagnosis, "rerouted": False, "reroute_attempt": None,
-                "rnafold_ss": None, "threading_failure_elem": None}
+        return _routing_result(canonical_alignment, canonical_cm, diagnosis)
 
     armless_alignment = cmalign_one(header, seq, armless_path)
     if armless_alignment is None:
         logger.warning(f"{header}: armless CM realignment failed ({armless_path}); "
                        f"falling back to canonical despite {missing_arm}-arm loss")
-        return {"final_alignment": canonical_alignment, "cm_used": canonical_cm,
-                "diagnosis": diagnosis, "rerouted": False, "reroute_attempt": armless_path,
-                "rnafold_ss": None, "threading_failure_elem": None}
+        return _routing_result(canonical_alignment, canonical_cm, diagnosis)
 
-    return {"final_alignment": armless_alignment, "cm_used": armless_path,
-            "diagnosis": diagnosis, "rerouted": True, "reroute_attempt": armless_path,
-            "rnafold_ss": None, "threading_failure_elem": None}
+    return _routing_result(armless_alignment, armless_path, diagnosis, rerouted=True)
 
 
 # --- topology + Sprinzl assignment ---
@@ -904,12 +945,19 @@ def process_one_record(args):
     Pool.map compatibility; canonical_cm and armless_cm_index are inside the
     tuple because each worker is a fresh process and module-level globals aren't
     reliably shared across fork vs spawn."""
-    header, seq, canonical_cm, armless_cm_index, debug = args
+    header, seq, canonical_cm, canonical_cm_index, armless_cm_index, debug = args
     seq = seq.upper().replace("T", "U")
 
     if debug:
-        logger.remove()
-        logger.add(sys.stderr, format="<level>{message}</level>", level="DEBUG")
+        _configure_logging("DEBUG")
+
+    if canonical_cm_index is not None:
+        aa_code = aa_field_to_cm_code(header_to_aa(header),
+                                       {(aa, None) for aa in canonical_cm_index})
+        canonical_cm = canonical_cm_index.get(aa_code)
+        if canonical_cm is None:
+            logger.warning(f"{header}: no canonical CM for aa={header_to_aa(header)!r}, skipped")
+            return {"header": header, "rows": [], "summary": "NO_CANONICAL_CM"}
 
     routing = select_cm_and_align(header, seq, canonical_cm, armless_cm_index)
     alignment = routing["final_alignment"]
@@ -1058,7 +1106,8 @@ def main():
     parser.add_argument("--fasta", required=True,
                         help="input FASTA; headers: 'id|aa|anticodon|taxon' or 'anticodon=XXX' tag")
     parser.add_argument("--canonical-cm", required=True,
-                        help="path to canonical CM (e.g. TRNAinf-euk.cm)")
+                        help="path to canonical CM (e.g. TRNAinf-euk.cm), or a directory of "
+                             "{label}_{AA}.cm files (e.g. Metazoan_P.cm) to select per-sequence by AA")
     parser.add_argument("--armless-cm-dir", required=True,
                         help="directory (searched recursively) for armless_trn{AA}_wo_{d|t}.cm files")
     parser.add_argument("--out", default="sprinzl_mapping.tsv",
@@ -1075,8 +1124,7 @@ def main():
     args = parser.parse_args()
 
     if args.debug:
-        logger.remove()
-        logger.add(sys.stderr, format="<level>{message}</level>", level="DEBUG")
+        _configure_logging("DEBUG")
 
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     records = [(str(r.id) + (" " + r.description.split(None, 1)[1]
@@ -1084,11 +1132,21 @@ def main():
                 str(r.seq))
                for r in SeqIO.parse(args.fasta, "fasta")]
     armless_cm_index = index_armless_cms(args.armless_cm_dir)
-    logger.info(f"{len(records)} sequences, canonical CM: {args.canonical_cm}, "
+
+    if os.path.isdir(args.canonical_cm):
+        canonical_cm_index = index_canonical_cms(args.canonical_cm)
+        canonical_cm = None
+        canonical_desc = f"per-AA from {args.canonical_cm} ({len(canonical_cm_index)} CMs)"
+    else:
+        canonical_cm_index = None
+        canonical_cm = args.canonical_cm
+        canonical_desc = args.canonical_cm
+
+    logger.info(f"{len(records)} sequences, canonical CM: {canonical_desc}, "
                 f"{len(armless_cm_index)} armless CMs available for rerouting, "
                 f"{args.processes} worker process(es)")
 
-    tasks = [(header, seq, args.canonical_cm, armless_cm_index, args.debug)
+    tasks = [(header, seq, canonical_cm, canonical_cm_index, armless_cm_index, args.debug)
              for header, seq in records]
 
     if args.processes > 1:
