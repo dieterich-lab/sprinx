@@ -819,7 +819,11 @@ def select_cm_and_align(header, seq, canonical_cm_tiers, armless_cm_index):
         if diag["anticodon_stem_index"] is not None:   # clean anchor: stop searching
             canonical_alignment, canonical_cm, diagnosis = aln, path, diag
             break
-        logger.info(f"{header}: moving to next canonical CM tier -- anticodon did not anchor cleanly here")
+        logger.warning(
+            f"{header}: anticodon did not anchor cleanly against {path}, "
+            f"moving to next canonical CM tier -- aligned_seq={aln['aligned_seq']} "
+            f"ss_cons={aln['ss_cons']}"
+        )
 
     if canonical_alignment is None:
         return _routing_result(None, None, None)
@@ -849,14 +853,20 @@ def select_cm_and_align(header, seq, canonical_cm_tiers, armless_cm_index):
             final_seq, _ = finalize_structure(canonical_alignment)
             if arm_is_threading_failure(canonical_alignment["aligned_seq"], final_seq, elem):
                 logger.info(
-                    f"{header}: CM diagnosed {missing_arm}-arm missing ({diagnosis['call']}) "
-                    f"but the span folds as a real hairpin "
-                    f"(CM threading failure, not genuine arm loss) -- patching via RNAfold"
+                    f"{header}: CM diagnosed {missing_arm}-arm missing against {canonical_cm} "
+                    f"({diagnosis['call']}) but the span folds as a real hairpin "
+                    f"(CM threading failure, not genuine arm loss) -- patching via RNAfold "
+                    f"-- aligned_seq={canonical_alignment['aligned_seq']} "
+                    f"ss_cons={canonical_alignment['ss_cons']}"
                 )
                 return _routing_result(canonical_alignment, canonical_cm, diagnosis,
                                         threading_failure_elem=elem)
 
     # genuine arm loss: reroute
+    logger.info(f"{header}: {missing_arm}-arm missing against {canonical_cm} "
+               f"({diagnosis['call']}), looking for an armless CM to reroute to -- "
+               f"aligned_seq={canonical_alignment['aligned_seq']} "
+               f"ss_cons={canonical_alignment['ss_cons']}")
     aa_code = aa_field_to_cm_code(header_to_aa(header), armless_cm_index.keys())
     anticodon = header_to_anticodon(header)
     armless_path = resolve_armless_cm(header, seq, aa_code, missing_arm, anticodon, armless_cm_index)
