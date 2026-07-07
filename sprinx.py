@@ -79,7 +79,7 @@ sprinx.py -- Sprinzl-coordinate annotation for mt-tRNAs.
 
 usage:
   python sprinx.py --fasta seqs.fa --canonical-cm TRNAinf-euk.cm \\
-      --armless-cm-dir cm_models/ --out-dir results/
+      --armless-cm-dir cm_models/ --out results/sprinzl_mapping.tsv
   python sprinx.py --fasta seqs.fa --canonical-cm TRNAinf-euk.cm \\
       --armless-cm-dir cm_models/ --plot --processes 8 --debug
   python sprinx.py --fasta seqs.fa --canonical-cm cm_models_by_clade/ \\
@@ -129,25 +129,6 @@ WC_PAIRS = {("A", "U"), ("U", "A"), ("G", "C"), ("C", "G"), ("G", "U"), ("U", "G
 # anticodon arm is the 2nd inner stem-loop (0-indexed) in a canonical cloverleaf;
 # topological fact, not tunable -- changing it requires a different CM.
 EXPECTED_ANTICODON_STEM_INDEX = 1
-
-SPRINZL_POSITIONS = (
-    [str(i) for i in range(1, 8)]
-    + ["8", "9"]
-    + [str(i) for i in range(10, 14)]
-    + ["14", "15", "16", "17", "17a", "18", "19", "20", "20a", "20b", "21"]
-    + [str(i) for i in range(22, 26)]
-    + ["26"]
-    + [str(i) for i in range(27, 32)]
-    + [str(i) for i in range(32, 39)]  # anticodon at 34-36
-    + [str(i) for i in range(39, 44)]
-    + ["44", "45"]
-    + [str(i) for i in range(46, 49)]
-    + [str(i) for i in range(49, 54)]
-    + [str(i) for i in range(54, 61)]
-    + [str(i) for i in range(61, 66)]
-    + [str(i) for i in range(66, 73)]
-    + ["73", "74", "75", "76"]
-)
 
 SPRINZL_REGION = {}
 for _p in range(1, 8):   SPRINZL_REGION[str(_p)] = "acceptor_5"
@@ -815,7 +796,7 @@ def locate_anticodon_stem(topo, ss, seq, anticodon):
     structurally encloses C) from being matched before the real C-stem.
     'does not enclose' check: a pseudostem that opens before C and closes after
     C must be excluded as D-arm candidate -- it IS the enclosing pseudostem.
-    see TestSprinzlAssignment::test_d_armless_sequence_gets_no_d_stem_positions."""
+    see TestSprinzlAssignment::test_d_armless_replacement_loop_gets_d_arm_labels."""
     pairs = pair_table(ss)
     inner_stems = topo["inner_stems"]
 
@@ -942,9 +923,9 @@ def sprinzl_map(ss, seq, anticodon):
 
 def process_one_record(args):
     """worker for one (header, seq) FASTA record. takes a single tuple for
-    Pool.map compatibility; canonical_cm and armless_cm_index are inside the
-    tuple because each worker is a fresh process and module-level globals aren't
-    reliably shared across fork vs spawn."""
+    Pool.map compatibility; canonical_cm, canonical_cm_index, and armless_cm_index
+    are inside the tuple because each worker is a fresh process and module-level
+    globals aren't reliably shared across fork vs spawn."""
     header, seq, canonical_cm, canonical_cm_index, armless_cm_index, debug = args
     seq = seq.upper().replace("T", "U")
 
@@ -952,6 +933,9 @@ def process_one_record(args):
         _configure_logging("DEBUG")
 
     if canonical_cm_index is not None:
+        # aa_field_to_cm_code expects (aa, arm) index keys (see index_armless_cms);
+        # canonical_cm_index has no arm dimension, so pair each aa with a dummy
+        # None to satisfy that shape without a second lookup helper.
         aa_code = aa_field_to_cm_code(header_to_aa(header),
                                        {(aa, None) for aa in canonical_cm_index})
         canonical_cm = canonical_cm_index.get(aa_code)
@@ -1109,7 +1093,8 @@ def main():
                         help="path to canonical CM (e.g. TRNAinf-euk.cm), or a directory of "
                              "{label}_{AA}.cm files (e.g. Metazoan_P.cm) to select per-sequence by AA")
     parser.add_argument("--armless-cm-dir", required=True,
-                        help="directory (searched recursively) for armless_trn{AA}_wo_{d|t}.cm files")
+                        help="directory (searched recursively) for "
+                             "armless_trn{AA}_wo_{d,t,d_and_t}.cm files")
     parser.add_argument("--out", default="sprinzl_mapping.tsv",
                         help="output TSV path (default: sprinzl_mapping.tsv)")
     parser.add_argument("--plot", default=None, metavar="PNG",

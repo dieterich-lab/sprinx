@@ -66,7 +66,11 @@ NAVIEW. Useful for sanity-checking a run, not part of the actual output.
 - Python 3, with `numpy`, `pandas`, `matplotlib`, `RNA` (ViennaRNA), `forgi`,
   `biopython`, `loguru`, `scipy`.
 - Infernal, with `cmalign` on `PATH`.
-- A canonical mt-tRNA CM, e.g. `TRNAinf-euk.cm`.
+- A canonical mt-tRNA CM, e.g. `TRNAinf-euk.cm`. `--canonical-cm` also accepts a
+  directory of `{label}_{AA}.cm` files (e.g. `Metazoa_A.cm`), in which case the
+  canonical CM is chosen per-sequence by the header's aa field instead of one
+  fixed CM for every sequence; `label` (clade or any prefix) is ignored. See
+  `data/mitofinder_models_converted/`.
 - Armless CMs named `armless_trn{AA}_wo_{d,t,d_and_t}.cm`, see `data/truncated_cm/`.
   This naming convention comes from Ozerova et al. 2024; the indexer matches on it
   directly and skips anything that doesn't fit rather than guessing.
@@ -85,6 +89,13 @@ python sprinx.py --fasta seqs.fa \
     --armless-cm-dir cm_models/ \
     --plot results/cloverleaves.png \
     --processes 8 --debug
+
+# --canonical-cm pointed at a directory: per-sequence canonical CM selection by aa
+python sprinx.py --fasta data/canonical.fa \
+    --canonical-cm data/mitofinder_models_converted \
+    --armless-cm-dir data/truncated_cm/ \
+    --out output/canonical_mitofinder.sprinzl.tsv \
+    --plot output/canonical_mitofinder.png
 ```
 
 Headers must be pipe-delimited as `id|aa|anticodon|taxon` (e.g.
