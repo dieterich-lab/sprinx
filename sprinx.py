@@ -379,10 +379,24 @@ def cmalign_one(header, seq, cm_path):
 def finalize_structure(alignment):
     """gapped cmalign alignment -> (ungapped_seq, ungapped_dotbracket) for Sprinzl
     numbering. strips both gap symbols: '-' (model deletion) and '.' (multi-seq
-    insert gap). converts WUSS to dot-bracket; repairs orphan brackets from
-    gap-stripping via drop_orphan_brackets."""
+    insert gap). converts WUSS to dot-bracket.
+    ss_cons encodes the CM's consensus structure -- both brackets of a pair can be
+    present even when THIS sequence deletes one side of it (e.g. one arm of a stem
+    genuinely absent). nulling only the bracket on the deleted side and leaving its
+    partner would let a plain left-to-right bracket-matching (drop_orphan_brackets,
+    RNA.ptable) silently re-pair that orphaned bracket with an unrelated stem instead
+    of recognizing it as broken -- observed corrupting the acceptor stem when a T-arm
+    lost only its 5' side. fix: read the pairing from the full, gap-free consensus
+    db via RNA.ptable *before* stripping, and null BOTH sides of any pair where
+    either column is gapped in this sequence, so stripping can never create an
+    orphan to begin with."""
     aligned_seq, ss_cons = alignment["aligned_seq"], alignment["ss_cons"]
-    db = RNA.db_from_WUSS(ss_cons)
+    db = list(RNA.db_from_WUSS(ss_cons))
+    pt = RNA.ptable("".join(db))
+    for i in range(len(db)):
+        partner = pt[i + 1] - 1
+        if partner >= 0 and (aligned_seq[i] in "-." or aligned_seq[partner] in "-."):
+            db[i] = "."
     pairs = [(s, d) for s, d in zip(aligned_seq, db) if s not in "-."]
     seq = "".join(s for s, _ in pairs).upper().replace("T", "U")
     ss = drop_orphan_brackets("".join(d for _, d in pairs))
@@ -622,19 +636,23 @@ def arm_span_has_enough_sequence(aligned_seq, elem):
     return n_nts >= len(elem["stem_cols"]) + MIN_HAIRPIN_LOOP
 
 
-def _arm_insert_subseq_and_fold(aligned_seq, final_seq, elem):
-    """extract ONLY the mis-threaded insert-state (lowercase) nucleotides within
-    elem's span and fold them with RNAfold MFE. narrow on purpose -- used for
-    PATCHING (patch_threading_failure_arm), so already-correct matched columns
-    are never touched. NOT for detecting whether a hairpin exists at all; a
-    real arm isn't always in insert columns -- see _arm_full_span_fold for that.
+def _arm_full_span_subseq_and_fold(aligned_seq, final_seq, elem):
+    """extract the FULL non-gap span (matched columns + inserts together) and
+    fold it with RNAfold MFE. full span, not insert-only: a real arm's
+    sequence isn't always mis-threaded into insert (lowercase) columns -- it
+    can land in the slot's own matched columns too (e.g. human mt-Val's T-arm
+    under TRNAinf-bact.cm). since this is only reached for a slot classify_arm_loss
+    already flagged absent (n_pairs below MIN_STEM_PAIRS), those matched columns
+    have no real base pairs to protect, so folding the whole span is safe.
+    used both to detect a hairpin (arm_is_threading_failure) and to source the
+    patch (patch_threading_failure_arm) -- one extraction, two consumers.
     returns (ungapped_positions, arm_ss), or (None, None) if there's too
     little sequence to fold (< MIN_HAIRPIN_LOOP + 2 nt)."""
     span_start, span_end = elem["span"]
     ungapped_positions, ungapped_idx = [], 0
     for gapped_idx, c in enumerate(aligned_seq):
         if c not in "-.":
-            if span_start <= gapped_idx < span_end and c.islower():
+            if span_start <= gapped_idx < span_end:
                 ungapped_positions.append(ungapped_idx)
             ungapped_idx += 1
 
@@ -646,57 +664,36 @@ def _arm_insert_subseq_and_fold(aligned_seq, final_seq, elem):
     return ungapped_positions, arm_ss
 
 
-def _arm_full_span_fold(aligned_seq, final_seq, elem):
-    """fold the FULL non-gap span (matched columns + inserts together), unlike
-    _arm_insert_subseq_and_fold's insert-only extraction -- used by
-    arm_is_threading_failure to detect a hairpin anywhere in the span.
-    returns arm_ss, or None if there's too little sequence to fold
-    (< MIN_HAIRPIN_LOOP + 2 nt)."""
-    span_start, span_end = elem["span"]
-    ungapped_positions, ungapped_idx = [], 0
-    for gapped_idx, c in enumerate(aligned_seq):
-        if c not in "-.":
-            if span_start <= gapped_idx < span_end:
-                ungapped_positions.append(ungapped_idx)
-            ungapped_idx += 1
-
-    if len(ungapped_positions) < MIN_HAIRPIN_LOOP + 2:
-        return None
-
-    arm_subseq = "".join(final_seq[p] for p in ungapped_positions)
-    arm_ss, _ = RNA.fold_compound(arm_subseq).mfe()
-    return arm_ss
-
-
 def arm_is_threading_failure(aligned_seq, final_seq, elem):
     """second-stage check, run only after arm_span_has_enough_sequence passes:
     does the span actually fold as a hairpin? that raw-count check can be
     fooled by a CM with wide insert-state capacity (e.g. a whole-family
     bacterial CM) -- a genuinely absent arm's span can pass on volume alone,
     filled with unrelated leftover sequence (e.g. 3' trailer) that folds as
-    nothing. folding the whole span here (both matched and insert columns,
-    since a real arm isn't always mis-threaded into inserts -- see
-    _arm_full_span_fold) is a much stronger positive signal.
+    nothing. folding the whole span here is a much stronger positive signal.
     True: RNAfold found a hairpin -- real, recoverable arm.
     False: nothing folds -- genuine loss despite passing the count check."""
-    arm_ss = _arm_full_span_fold(aligned_seq, final_seq, elem)
+    _, arm_ss = _arm_full_span_subseq_and_fold(aligned_seq, final_seq, elem)
     return arm_ss is not None and "(" in arm_ss
 
 
 def patch_threading_failure_arm(aligned_seq, final_seq, final_ss, elem):
     """recover arm structure for a CM threading failure: arm present but mis-threaded
-    into insert columns. called only once arm_is_threading_failure has confirmed
-    a real hairpin exists there. the rest of final_ss (from the canonical CM) is
-    already correct, so we splice in ONLY the mis-threaded span's own RNAfold
-    fold rather than refolding the whole molecule -- full-sequence RNAfold on a
-    mt-tRNA is unreliable (tertiary contacts, base modifications; Helm 2006,
-    doi:10.1093/nar/gkl348), but a short isolated span (13-20nt) is fine.
+    within elem's span (matched columns, insert columns, or both -- see
+    _arm_full_span_subseq_and_fold). called only once arm_is_threading_failure has
+    confirmed a real hairpin exists there. the rest of final_ss (from the canonical
+    CM) is already correct, so we splice in ONLY this span's own RNAfold fold rather
+    than refolding the whole molecule -- full-sequence RNAfold on a mt-tRNA is
+    unreliable (tertiary contacts, base modifications; Helm 2006,
+    doi:10.1093/nar/gkl348), but a short isolated span (13-20nt) is fine. elem was
+    already flagged arm-absent (n_pairs below MIN_STEM_PAIRS), so its matched
+    columns have no real base pairs to protect either -- safe to overwrite.
     safety: every bracket in the fold must target a '.' in final_ss, or the
     patch is aborted -- placing an open whose matching close is blocked leaves
     a dangling bracket RNA.ptable() would reject.
     returns patched final_ss, or the original if: no stem found, a bracket
     conflicts with existing structure, or the patch is unbalanced (safety net)."""
-    ungapped_positions, arm_ss = _arm_insert_subseq_and_fold(aligned_seq, final_seq, elem)
+    ungapped_positions, arm_ss = _arm_full_span_subseq_and_fold(aligned_seq, final_seq, elem)
 
     if ungapped_positions is None or "(" not in arm_ss:
         return final_ss

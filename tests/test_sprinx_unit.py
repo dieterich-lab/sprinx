@@ -469,20 +469,37 @@ class TestArmSpanAndPatch:
 
     def test_val_arm_is_threading_failure_via_full_span(self, canonical36_data):
         """regression test: a real arm's sequence isn't always in insert (lowercase)
-        columns -- human mt-Val's T-arm sits in matched columns here, so the insert-only
-        extraction finds nothing (None) while arm_is_threading_failure, which folds the
-        FULL span, correctly finds the real hairpin. an earlier version of
-        arm_is_threading_failure used the insert-only extraction and wrongly returned
-        False for this exact case, causing Val to be rerouted instead of patched."""
+        columns -- human mt-Val's T-arm sits partly in matched columns here.
+        arm_is_threading_failure and patch_threading_failure_arm both use the FULL
+        span (matched + insert together, _arm_full_span_subseq_and_fold), so they see
+        the same hairpin. an earlier version used an insert-only extraction for
+        detection that found nothing here, wrongly causing Val to be rerouted instead
+        of patched."""
         seqs, elems = canonical36_data
         _, ss = load_sto("aln_canonical36_qutrna_flags.sto")
         val_key = next(k for k in seqs if "Val|UAC|Homo" in k)
         aligned_seq = seqs[val_key]
         t_elem = elems[-1]
         final_seq, _ = sprinx.finalize_structure({"aligned_seq": aligned_seq, "ss_cons": ss})
-        positions, _ = sprinx._arm_insert_subseq_and_fold(aligned_seq, final_seq, t_elem)
-        assert positions is None, "test assumption broken: Val's T-arm now has insert-column sequence"
         assert sprinx.arm_is_threading_failure(aligned_seq, final_seq, t_elem)
+
+    def test_val_patch_recovers_real_data_end_to_end(self, canonical36_data):
+        """regression test: patch_threading_failure_arm must actually pair up real
+        (unmodified) human mt-Val data, not just the synthetic aln used by
+        test_patch_recovers_paired_structure. an earlier version silently no-opped
+        here because it sourced the patch from insert-only columns while Val's T-arm
+        sequence sits mostly in matched columns -- detection said "real hairpin" but
+        the patch itself found nothing to splice in, so the final structure kept the
+        T-arm as unpaired dots despite the "patched" label."""
+        seqs, elems = canonical36_data
+        _, ss = load_sto("aln_canonical36_qutrna_flags.sto")
+        val_key = next(k for k in seqs if "Val|UAC|Homo" in k)
+        aligned_seq = seqs[val_key]
+        t_elem = elems[-1]
+        final_seq, final_ss = sprinx.finalize_structure({"aligned_seq": aligned_seq, "ss_cons": ss})
+        patched = sprinx.patch_threading_failure_arm(aligned_seq, final_seq, final_ss, t_elem)
+        assert patched.count("(") > final_ss.count("("), "patch did not add paired positions"
+        assert patched.count("(") == patched.count(")")
 
     def test_t_armless_sequences_fail_full_span_check(self, tarmless_data):
         """complement to test_all_t_armless_sequences_fail_span_check: genuinely
