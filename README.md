@@ -70,7 +70,7 @@ NAVIEW. Useful for sanity-checking a run, not part of the actual output.
   directory of `{label}_{AA}.cm` files (e.g. `Metazoa_A.cm`), in which case the
   canonical CM is chosen per-sequence by the header's aa field instead of one
   fixed CM for every sequence; `label` (clade or any prefix) is ignored. See
-  `data/mitofinder_models_converted/`.
+  `data/full_tRNAs_mitofinder_tRNAScanSE/`.
 - Armless CMs named `armless_trn{AA}_wo_{d,t,d_and_t}.cm`, see `data/truncated_cm/`.
   This naming convention comes from Ozerova et al. 2024; the indexer matches on it
   directly and skips anything that doesn't fit rather than guessing.
@@ -92,7 +92,7 @@ python sprinx.py --fasta seqs.fa \
 
 # --canonical-cm pointed at a directory: per-sequence canonical CM selection by aa
 python sprinx.py --fasta data/canonical.fa \
-    --canonical-cm data/mitofinder_models_converted \
+    --canonical-cm data/full_tRNAs_mitofinder_tRNAScanSE \
     --armless-cm-dir data/truncated_cm/ \
     --out output/canonical_mitofinder.sprinzl.tsv \
     --plot output/canonical_mitofinder.png
@@ -111,13 +111,13 @@ sprinx.py                   CLI, alignment, arm-loss classification, Sprinzl
 conftest.py                  pytest setup, loads .env / SPRINX_* vars for integration tests
 env.example                  template for .env
 data/                        example FASTA, canonical CM, armless CM library
-  mitofinder_models/           canonical CMs from MitoFinder, old INFERNAL-1 [1.0] format;
+  mitofinder_models/           symlink to canonical CMs from MitoFinder, old INFERNAL-1 [1.0] format;
                                 cmalign (Infernal 1.1.x) refuses these outright
-  mitofinder_models_converted/ same CMs reformatted to current INFERNAL1/a via
+  full_tRNAs_mitofinder_tRNAScanSE/ same CMs reformatted to current INFERNAL1/a via
                                 `cmconvert -a`, one file in, one file out, same filename;
                                 originals in mitofinder_models/ are untouched -- regenerate
                                 with: `for f in data/mitofinder_models/*.cm; do
-                                cmconvert -a "$f" > "data/mitofinder_models_converted/$(basename "$f")"; done`
+                                cmconvert -a "$f" > "data/full_tRNAs_mitofinder_tRNAScanSE/$(basename "$f")"; done`
 tests/
   test_sprinx_unit.py          unit tests, run anywhere
   test_sprinx_integration.py   runs real cmalign / RNAfold end to end
