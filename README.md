@@ -26,14 +26,13 @@ you need to.
 2. Anchor on the anticodon from the FASTA header, never inferred from position. A
    missing D-arm shifts the anticodon downstream in the model; a missing T-arm doesn't
    shift anything. That asymmetry tells you which arm is gone.
-3. A stem slot with zero base-paired columns cannot form a stem, that's geometry, not a
-   tunable threshold. But zero pairs has two causes, and they need different responses:
+3. A stem slot with zero base-paired columns cannot form a stem. But zero pairs has two causes, and they need different responses:
    the arm genuinely isn't there, or cmalign threaded a divergent sequence into insert
    columns instead of the model's stem columns. Counting nucleotides in the span against
    the physical minimum for a hairpin (stem length plus a 3nt loop) tells them apart.
 4. Genuine arm loss reroutes to the matching `armless_trn{AA}_wo_{d,t,d_and_t}.cm`.
    Isoacceptors (Leu1/Leu2, Ser1/Ser2) get disambiguated by anticodon, not by filename.
-5. Threading failures get patched, not rerouted: fold just the mis-threaded span
+5. If there are threading failures, patch them instead of rerouting to truncated CM: fold just the mis-threaded span
    (13-20nt) with RNAfold and splice the result in. Folding the whole molecule with
    RNAfold is a bad idea, mt-tRNA has tertiary contacts and modified bases that MFE
    doesn't account for.
@@ -189,3 +188,63 @@ pytest tests/test_sprinx_integration.py     # requires cmalign and SPRINX_CANONI
 
 Paths in `.env` must be absolute. Relative paths fail silently the moment `cwd` differs
 from what you assumed.
+
+## Combined CM approach
+
+Combined all CMs as:
+
+```
+❯ cat full_tRNAs_mitofinder_tRNAScanSE/*.cm truncated_cm/*.cm > combined.cm
+❯ cmpress combined.cm
+Working...    done.
+Pressed and indexed 90 CMs and p7 HMM filters (90 names).
+Covariance models and p7 filters pressed into binary file:  combined.cm.i1m
+SSI index for binary covariance model file:                 combined.cm.i1i
+Optimized p7 filter profiles (MSV part)  pressed into:      combined.cm.i1f
+Optimized p7 filter profiles (remainder) pressed into:      combined.cm.i1p
+```
+
+Then extract top 2 `cmscan` hits for each query sequence in the combined `data/all.fa` file:
+```
+cmscan --tblout output/all_cmscan.tbl --noali data/combined.cm data/all.fa > /dev/null && grep -v '^#' output/all_cmscan.tbl | sort -k3,3 -k16,16g | awk '{c[$3]++; if (c[$3]<=2) print}' > output/all_cmscan_top2.tbl
+```
+
+This results in Habronattus and Ascaris T-armless tRNAs not necessarily matching with T-armless truncated CMs. See top hits below:
+```
+❯ grep Habronattus output/all_cmscan_top2.tbl
+N.seed25-1              -         mtdbD00039778|Asn|GUU|Habronattus -          cm       25       41       22       38      +    no    1 0.18   1.6   11.5      0.07 ?   -
+armless_trnN_wo_d       -         mtdbD00039778|Asn|GUU|Habronattus -          cm       15       31       22       38      +    no    1 0.18   0.0   15.3      0.11 ?   -
+armless_trnH_wo_t       -         mtdbD00039780|His|GUG|Habronattus -          cm        8       44        8       43      +    no    1 0.19   0.1   36.3   1.4e-06 !   -
+H.seed25-1              -         mtdbD00039780|His|GUG|Habronattus -          cm        1       55        1       52      +    3'    3 0.21   8.5   27.0     4e-06 !   -
+armless_trnP_wo_t       -         mtdbD00039781|Pro|UGG|Habronattus -          cm        8       45        5       41      +    no    1 0.19   0.1   27.0   7.6e-05 !   -
+armless_trnA_wo_t       -         mtdbD00039781|Pro|UGG|Habronattus -          cm        1       52        2       51      +    no    1 0.18   1.3   26.2   0.00026 !   -
+T.seed25-1              -         mtdbD00039782|Thr|UGU|Habronattus -          cm        1       57        1       57      +    3'    3 0.21  12.0   22.4   5.3e-05 !   -
+armless_trnT_wo_t       -         mtdbD00039782|Thr|UGU|Habronattus -          cm        8       46        8       45      +    no    1 0.21   0.0   25.3     8e-05 !   -
+❯ grep Ascaris output/all_cmscan_top2.tbl
+armless_trnP_wo_t       -         mtdbD00031151|Pro|UGG|Ascaris -          cm        1       53        1       56      +    no    1 0.27   0.7   41.1   3.5e-08 !   -
+P.seed25-1              -         mtdbD00031151|Pro|UGG|Ascaris -          cm        1       66        1       56      +    no    1 0.27  10.4   27.3   6.1e-06 !   -
+V.seed25-1              -         mtdbD00031152|Val|UAC|Ascaris -          cm        1       69        1       57      +    no    1 0.25   8.4   28.4   3.2e-06 !   -
+armless_trnV_wo_t       -         mtdbD00031152|Val|UAC|Ascaris -          cm        1       56        1       57      +    no    1 0.25   0.2   33.7   4.1e-06 !   -
+W.seed25-1                  -         mtdbD00031153|Trp|UCA|Ascaris -          cm        1       67        1       57      +    no    1 0.25   6.4   39.5   2.5e-09 !   -
+armless_trnW_wo_t           -         mtdbD00031153|Trp|UCA|Ascaris -          cm        1       53        1       55      +    no    1 0.25   0.0   41.0   1.1e-07 !   -
+armless_trnP_wo_t    -         mtdbD00031155|Asn|GUU|Ascaris -          cm        1       53        1       57      +    no    1 0.30   0.1   24.8   0.00028 !   -
+H.seed25-1           -         mtdbD00031155|Asn|GUU|Ascaris -          cm        1       68        1       57      +    no    1 0.30   6.7   20.2   0.00031 !   -
+armless_trnY_wo_t           -         mtdbD00031156|Tyr|GUA|Ascaris -          cm        1       53        1       54      +    no    1 0.15   6.9   29.7   1.3e-05 !   -
+armless_trnH_wo_t           -         mtdbD00031156|Tyr|GUA|Ascaris -          cm        1       52        1       53      +    no    1 0.15   6.1   30.9   2.9e-05 !   -
+L_infernalcluster2.seed25-1 -         mtdbD00031157|Leu2|UAA|Ascaris -          cm        1       66        1       55      +    no    1 0.33   2.7   29.5   9.9e-07 !   -
+armless_trnL2_wo_t          -         mtdbD00031157|Leu2|UAA|Ascaris -          cm        1       54        1       55      +    no    3 0.33   0.0   26.7   0.00011 !   -
+I.seed25-1              -         mtdbD00031158|Ile|GAU|Ascaris -          cm        1       66        1       61      +    no    1 0.23  11.8   18.5   0.00046 !   -
+D.seed25-1              -         mtdbD00031158|Ile|GAU|Ascaris -          cm        1       67        1       61      +    no    1 0.23  11.8   19.5   0.00073 !   -
+F.seed25-1              -         mtdbD00031159|Phe|GAA|Ascaris -          cm        1       66        1       59      +    no    1 0.31   8.4   24.8   7.2e-06 !   -
+armless_trnF_wo_t       -         mtdbD00031159|Phe|GAA|Ascaris -          cm        1       53        1       56      +    no    1 0.29   0.2   28.6   1.1e-05 !   -
+armless_trnC_wo_t       -         mtdbD00031160|Cys|GCA|Ascaris -          cm        1       52        1       58      +    no    3 0.33   0.4   21.1    0.0014 !   -
+C.seed25-1              -         mtdbD00031160|Cys|GCA|Ascaris -          cm        1       66        1       58      +    no    1 0.33   9.2   15.6    0.0065 !   -
+armless_trnD_wo_t       -         mtdbD00031162|Asp|GUC|Ascaris -          cm        1       54        1       60      +    no    1 0.22   1.9   27.5   0.00039 !   -
+D.seed25-1              -         mtdbD00031162|Asp|GUC|Ascaris -          cm        1       67        1       60      +    no    1 0.22  12.4   17.4    0.0027 !   -
+G.seed25-1              -         mtdbD00031163|Gly|UCC|Ascaris -          cm        1       66        1       56      +    no    1 0.25   7.5   35.7   9.2e-09 !   -
+armless_trnG_wo_t       -         mtdbD00031163|Gly|UCC|Ascaris -          cm        1       54        1       56      +    no    1 0.25   0.1   50.0   9.4e-09 !   -
+H.seed25-1           -         mtdbD00031164|His|GUG|Ascaris -          cm        1       68        1       55      +    no    1 0.33   7.7   23.8   3.1e-05 !   -
+armless_trnC_wo_t    -         mtdbD00031164|His|GUG|Ascaris -          cm        1       52        1       55      +    no    1 0.33   0.1   19.9    0.0026 !   -
+armless_trnA_wo_t    -         mtdbD00031165|Ala|UGC|Ascaris -          cm        1       52        1       56      +    no    1 0.41   0.0   35.4   2.1e-06 !   -
+A.seed25-1           -         mtdbD00031165|Ala|UGC|Ascaris -          cm        1       65        1       56      +    no    1 0.41   0.6   28.6   3.4e-06 !   -
+```
