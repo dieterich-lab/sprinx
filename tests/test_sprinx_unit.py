@@ -297,6 +297,25 @@ def test_assign_anticodon_loop_anchors_on_anticodon_not_loop_edge():
     assert labels[9] == "38A" and labels[10] == "38B"  # overflow after
 
 
+def test_long_unpaired_variable_region_uses_e_loop_not_48_overflow():
+    """real case (S. pombe mt-Ser1 under TRNAinf-bact.cm): the CM sometimes
+    doesn't thread the variable region as a stem at all -- it comes out as
+    one long unpaired run, so no v_stem is found. that must NOT fall back to
+    stretching 44-48 with generic letter overflow (48A, 48B, ...), which was
+    never a real Sprinzl code -- the excess length is itself the signal of a
+    real extended variable region, stem or not, so it gets 44/45, e1-e5
+    (+overflow on e5 past 5nt), 46/47/48, same as the stem-bearing case."""
+    ss = ("(((((((" + "(((CCC)))" + "(((GGG)))" + "." * 11 + "(((AAA)))" + ")))))))")
+    seq = ("A" * 7 + "AAA" + "CCC" + "AAA" + "AAA" + "GGG" + "AAA"
+           + "U" * 11 + "AAA" + "AAA" + "AAA" + "A" * 7)
+    assert len(ss) == len(seq)
+    sprinzl = sprinx.sprinzl_map(ss, seq, "GGG")
+    assert [i for i in range(len(seq)) if i not in sprinzl] == []
+    var_loop_start = ss.index("." * 11)
+    got = [sprinzl[var_loop_start + i] for i in range(11)]
+    assert got == ["44", "45", "e1", "e2", "e3", "e4", "e5", "e5A", "46", "47", "48"]
+
+
 # -----------------------------------------------------------------------
 # _forgi_stem_groups: bulge merging vs real arm junctions
 # -----------------------------------------------------------------------

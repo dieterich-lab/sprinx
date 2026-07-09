@@ -1257,6 +1257,19 @@ def sprinzl_map(ss, seq, anticodon, missing_arm=None):
         n3 = min(len(arms["v_stem3"]), 7)
         assign_slots(labels, arms["v_stem3"],   [f"e2{k}" for k in range(n3, 0, -1)])
         assign_slots(labels, arms["vt_linker"], ["46", "47", "48"])
+    elif len(arms["var_loop"]) > 5:
+        # no paired v-stem was threaded, but the variable region is longer
+        # than the plain 44-48 5-slot capacity can hold -- that excess length
+        # is itself the signal of a real extended variable region (class-ii),
+        # whether or not a stem happens to be threaded there. treat it as
+        # loop-only: 44/45 before, e1-e5 (+letter-suffix overflow on e5 for
+        # anything beyond 5nt) in the middle, 46/47/48 after -- not a bigger
+        # 44-48-derived overflow run, which was never a real Sprinzl code.
+        var_loop = arms["var_loop"]
+        before, middle, after = var_loop[:2], var_loop[2:-3], var_loop[-3:]
+        assign_slots(labels, before, ["44", "45"])
+        assign_slots(labels, middle, [f"e{i}" for i in range(1, 6)])
+        assign_slots(labels, after,  ["46", "47", "48"])
     else:
         assign_slots(labels, arms["var_loop"], ["44", "45", "46", "47", "48"])
     assign_slots(labels, arms["t_stem5"],    [str(i) for i in range(49, 54)])
