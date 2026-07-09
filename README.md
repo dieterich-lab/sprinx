@@ -5,7 +5,7 @@ Assigns Sprinzl coordinates to mitochondrial tRNA sequences.
 ## Why this exists
 
 mt-tRNAs fold into four different shapes: cloverleaf, D-armless, T-armless,
-doubly-armless (Ozerova et al. 2024, PMC11571959). Label positions relative to the
+doubly-armless (Ozerova et al. 2024). Label positions relative to the
 wrong shape and you get numbers that look plausible but are wrong. That's worse than
 having no numbers at all.
 
@@ -37,10 +37,10 @@ you need to.
    (13-20nt) with RNAfold and splice the result in. Folding the whole molecule with
    RNAfold is a bad idea, mt-tRNA has tertiary contacts and modified bases that MFE
    doesn't account for.
-6. Assign Sprinzl numbers (Sprinzl et al. 1998, PMC147216) across the resulting
+6. Assign Sprinzl numbers across the resulting
    structure, including the D-armless replacement-loop case.
 
-The full reasoning, with citations, is in the module docstring at the top of
+The full reasoning is in the module docstring at the top of
 [sprinx.py](sprinx.py). Read it before touching the arm-loss logic.
 
 ## Output
