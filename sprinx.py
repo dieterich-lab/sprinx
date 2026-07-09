@@ -4,18 +4,17 @@ sprinx.py -- Sprinzl-coordinate annotation for mt-tRNAs.
 
 1. problem
    mt-tRNAs exist in four structural shapes: cloverleaf, D-armless, T-armless,
-   doubly-armless (Ozerova et al. 2024, PMC11571959). Sprinzl labels must be
+   doubly-armless (Ozerova et al. 2024). Sprinzl labels must be
    assigned relative to the correct shape; wrong shape -> wrong labels.
 
 2. why score-based CM selection fails
-   E-values are calibrated per model (Nawrocki & Eddy 2013, PMC3810854);
+   E-values are calibrated per model (Infernal User Guide);
    an armless CM with fewer columns produces better E-values for canonical
    sequences than the canonical CM does, regardless of biological fit.
    length-normalising (bits/column) doesn't help: armless CMs retain the
    highest-information columns (acceptor + anticodon stems), inflating
-   per-column scores. Rfam avoids this with hand-set per-family GA cutoffs
-   (Kalvari et al., PMC6754622); this script avoids it by never comparing
-   scores across models at all.
+   per-column scores. Rfam avoids this with hand-set per-family GA cutoffs;
+   this script avoids it by never comparing scores across models at all.
 
 3. pipeline
    a. align to a canonical CM with cmalign --notrunc --nonbanded -g. --canonical-cm
@@ -28,9 +27,9 @@ sprinx.py -- Sprinzl-coordinate annotation for mt-tRNAs.
       structure into wrong model columns (register shift). missing DOWNSTREAM
       arm (T-arm) does not shift. measure offset = expected_anticodon_slot - observed.
    c. n_pairs==0 at a stem slot means zero alignment columns have BOTH pairing
-      partners simultaneously non-gap. this is a structural impossibility (if no
-      column can form a pair, no stem can exist there), not a threshold judgment.
-      however, n_pairs==0 has two distinct causes that require different responses:
+      partners simultaneously non-gap. no column can form a pair, so no stem can
+      exist there -- geometry forces the call, with no threshold to tune.
+      n_pairs==0 has two distinct causes that require different responses:
         (i)  genuine arm loss: the sequence simply has no arm. the element span
              across the alignment is mostly or entirely gap characters.
         (ii) CM threading failure: the arm exists but cmalign placed its sequence
@@ -40,9 +39,8 @@ sprinx.py -- Sprinzl-coordinate annotation for mt-tRNAs.
       distinguishing (i) from (ii): count non-gap nucleotides across the full
       element span (stem + loop model columns + intervening insert characters).
       if the count is < n_stem_cols + MIN_HAIRPIN_LOOP (=3, steric minimum for
-      RNA backbone; Woodson 2008, doi:10.1146/annurev.physchem.59.032607.093743),
-      no hairpin can form physically: genuine arm loss (i). otherwise: threading
-      failure (ii).
+      the RNA backbone to close a hairpin), no hairpin can form physically:
+      genuine arm loss (i). otherwise: threading failure (ii).
       hybrid Infernal + RNAfold design: for threading failures, Infernal's
       canonical CM is correct for all arms it DID thread properly; only the
       mis-threaded arm needs structural recovery. RNAfold MFE on the short arm
@@ -51,12 +49,12 @@ sprinx.py -- Sprinzl-coordinate annotation for mt-tRNAs.
       relying on Infernal alone would call threading failures as arm loss and
       misroute to an armless CM; (b) relying on RNAfold alone for full-sequence
       mt-tRNA folding is unreliable due to tertiary interactions and base
-      modifications not captured by 2D MFE (Helm 2006, doi:10.1093/nar/gkl348).
-   d. if genuinely absent, reroute to armless CM (Ozerova et al. 2024,
-      PMC11571959). isoacceptors (Leu1/Leu2, Ser1/Ser2) disambiguated by
+      modifications not captured by 2D MFE.
+   d. if genuinely absent, reroute to armless CM (Ozerova et al. 2024).
+      isoacceptors (Leu1/Leu2, Ser1/Ser2) disambiguated by
       anticodon, not filename suffix. for doubly-armless (D + T both missing),
       routes to the d_and_t CM.
-   e. assign Sprinzl coordinates (Sprinzl et al. 1998, PMC147216).
+   e. assign Sprinzl coordinates.
 
 4. implementation notes
    cmalign flags (required together, every call):
@@ -65,15 +63,13 @@ sprinx.py -- Sprinzl-coordinate annotation for mt-tRNAs.
      --nonbanded : exact CYK/Inside DP; HMM banding is ~10x faster but
                    introduces alignment errors on divergent mt-tRNA structures.
      -g          : glocal; prevents local begin/end states skipping arm regions.
-     flag set follows QutRNA2 (github.com/dieterich-lab/QutRNA2,
-     biorxiv:2025.10.20.683443).
    header format (pipe-delimited):
      field 1: seq id | field 2: three-letter aa (e.g. Ala, Leu1)
      field 3: anticodon (3nt, RNA or DNA) | field 4: taxon
      fallback: 'anticodon=XXX' tag anywhere in the header.
      field 3 is the primary key for CM selection; field 2 only identifies aa.
    armless CM filenames: armless_trn{AA}_wo_{arm}.cm where arm is d, t, or d_and_t
-   for doubly-armless (Ozerova et al. 2024, PMC11571959). armless CM rerouting
+   for doubly-armless (Ozerova et al. 2024). armless CM rerouting
    is unaffected by which canonical CM tier won above -- it only triggers once
    a genuine arm-loss diagnosis is made from whichever tier's alignment was used.
    each --canonical-cm source is a directory of {label}_{AA}.cm files (e.g.
@@ -126,7 +122,7 @@ def _configure_logging(level):
 _configure_logging("INFO")
 
 
-# --- constants: tRNA topology facts + Sprinzl coordinate system (PMC147216) ---
+# --- constants: tRNA topology facts + Sprinzl coordinate system ---
 
 WC_PAIRS = {("A", "U"), ("U", "A"), ("G", "C"), ("C", "G"), ("G", "U"), ("U", "G")}
 
@@ -153,7 +149,7 @@ for _p in range(61, 66):  SPRINZL_REGION[str(_p)] = "T_stem_3"
 for _p in range(66, 73):  SPRINZL_REGION[str(_p)] = "acceptor_3"
 for _p in range(73, 77):  SPRINZL_REGION[str(_p)] = "discriminator_CCA"
 
-# armless CM filename regex; naming follows Ozerova et al. 2024 (PMC11571959).
+# armless CM filename regex; naming follows Ozerova et al. 2024.
 ARMLESS_CM_RE = re.compile(r"armless_trn(\w+)_wo_(d_and_t|d|t)\.cm$")
 
 
@@ -164,16 +160,6 @@ def run(cmd):
     logger.debug(f"  $ {' '.join(cmd)}")
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)
     return result.stdout, result.stderr, result.returncode
-
-
-def pair_table(ss):
-    """dot-bracket -> {i: j, j: i}, 0-indexed. uses RNA.ptable() which raises
-    on malformed input instead of silently mishandling an unpartnered bracket;
-    callers that may produce orphan brackets should run drop_orphan_brackets first."""
-    pt = RNA.ptable(ss)
-    if pt is None:
-        raise ValueError(f"ViennaRNA rejected this as a valid structure: {ss!r}")
-    return {i - 1: pt[i] - 1 for i in range(1, len(pt)) if pt[i] > 0}
 
 
 def drop_orphan_brackets(ss):
@@ -401,21 +387,51 @@ def finalize_structure(alignment):
 # via n_pairs==0 at the T-arm slot. doubly-armless (D + T both missing) produces
 # offset==0 with n_pairs==0 at both D-arm and T-arm slots simultaneously.
 
-def get_stem_loop_elements(ss):
-    """decompose dot-bracket (or WUSS) into ordered inner stem-loop dicts,
-    merging across internal-loop bulges via forgi BulgeGraph. excludes the outer
-    acceptor stem (no hairpin loop). each dict: {'stem_cols', 'loop_cols', 'span'},
-    all 0-indexed into the alignment (or sequence if ss is ungapped).
-    RNA.db_from_WUSS is idempotent on plain dot-bracket, so this accepts either."""
+def _forgi_stem_groups(ss):
+    """all physical stems via forgi BulgeGraph, merging pieces a single interior-
+    loop bulge splits apart (forgi has no notion of "one bulged helix" vs "two
+    helices", so that merging has to happen here).
+    an interior-loop (forgi 'i') edge connects exactly two stems, and its graph
+    shape is the same whether it is a real bulge inside one helix (merge) or a
+    junction between two distinct helices (don't merge). the junction case only
+    arises when a multi-branch loop degenerates to two stems -- an armless CM
+    leaving just the acceptor + C-stem (doubly-armless), or C-stem + T-stem; a
+    full cloverleaf joins its arms through a multiloop ('m'), never 'i', so its
+    arms never get merged. the tell is how many arm/acceptor "anchors" a merged
+    group holds: each hairpin is one arm, and the outermost stem (lowest start
+    column = acceptor) counts as one more anchor when the group also holds a
+    hairpin. more than one anchor means the group spans a real junction, so keep
+    the stems separate; one or none is a single-helix bulge (acceptor-internal
+    or arm-internal), so merge. TestForgiStemGroups covers the four classes.
+    each dict: {'stem5_cols', 'stem3_cols', 'stem_cols' (both sides), 'loop_cols'
+    (hairpin loop, or [] for the acceptor / any hairpin-less stem), 'span'},
+    0-indexed, sorted by span start. shared by get_stem_loop_elements (arm-loss
+    diagnosis) and parse_topology (Sprinzl labeling) so both see the same
+    physical stems instead of two stem parsers drifting apart."""
     db = RNA.db_from_WUSS(ss)
     bg = BulgeGraph.from_dotbracket(db)
     stem_elems = sorted([e for e in bg.defines if e.startswith("s")],
                         key=lambda e: bg.defines[e][0])
+    acceptor_elem = stem_elems[0] if stem_elems else None  # lowest start col
 
     def interior_neighbors(elem):
-        # stem elements on the other side of a single interior loop (bulge merging)
         return {nb2 for nb in bg.edges[elem] if nb.startswith("i")
                 for nb2 in bg.edges[nb] if nb2.startswith("s") and nb2 != elem}
+
+    def hairpin_neighbors(elem):
+        return {nb for nb in bg.edges[elem] if nb.startswith("h")}
+
+    def make_group(members):
+        stem5 = sorted(col for g in members for col in range(bg.defines[g][0] - 1, bg.defines[g][1]))
+        stem3 = sorted(col for g in members for col in range(bg.defines[g][2] - 1, bg.defines[g][3]))
+        hairpins = {h for g in members for h in hairpin_neighbors(g)}
+        loop_cols = []
+        if hairpins:
+            a, b = bg.defines[next(iter(hairpins))][:2]
+            loop_cols = list(range(a - 1, b))
+        stem_cols = sorted(stem5 + stem3)
+        return {"stem5_cols": stem5, "stem3_cols": stem3, "stem_cols": stem_cols,
+                "loop_cols": loop_cols, "span": (min(stem_cols), max(stem_cols) + 1)}
 
     groups, used = [], set()
     for s in stem_elems:
@@ -428,28 +444,25 @@ def get_stem_loop_elements(ss):
                 if nb not in group:
                     group.add(nb)
                     frontier.append(nb)
-        used |= group
 
-        stem_cols = sorted(set(
-            col for g in group
-            for a, b, c, d in [bg.defines[g]]
-            for col in list(range(a - 1, b)) + list(range(c - 1, d))
-        ))
-        loop_cols = []
-        for g in group:
-            for nb in bg.edges[g]:
-                if nb.startswith("h"):
-                    a, b = bg.defines[nb][:2]
-                    loop_cols = list(range(a - 1, b))
-
-        groups.append({
-            "stem_cols": stem_cols,
-            "loop_cols": loop_cols,
-            "span": (min(stem_cols), max(stem_cols) + 1),
-        })
+        hairpins = {h for g in group for h in hairpin_neighbors(g)}
+        anchors = len(hairpins) + (1 if hairpins and acceptor_elem in group else 0)
+        if anchors > 1:
+            for g in group:  # real junction (acceptor<->arm or arm<->arm), not a bulge
+                used.add(g)
+                groups.append(make_group({g}))
+        else:
+            used |= group
+            groups.append(make_group(group))
 
     groups.sort(key=lambda g: g["span"][0])
-    return [g for g in groups if g["loop_cols"]]  # drop acceptor stem (no hairpin)
+    return groups
+
+
+def get_stem_loop_elements(ss):
+    """ordered inner stem-loop dicts, excluding the outer acceptor stem (no
+    hairpin loop of its own). each dict: {'stem_cols', 'loop_cols', 'span'}."""
+    return [g for g in _forgi_stem_groups(ss) if g["loop_cols"]]
 
 
 def find_anticodon_stem_index(aligned_seq, stem_loop_elements, anticodon):
@@ -583,8 +596,7 @@ def classify_arm_loss(header, aligned_seq, ss_cons,
 # --- CM routing: canonical-first, structural diagnosis, RNAfold cross-check ---
 
 # steric minimum: RNA backbone cannot close a hairpin with < 3 unpaired nts.
-# triloops are the smallest observed RNA hairpins. Woodson 2008, Annu Rev Phys
-# Chem 59:617-639. doi:10.1146/annurev.physchem.59.032607.093743
+# triloops are the smallest observed RNA hairpins.
 MIN_HAIRPIN_LOOP = 3
 
 # soft threshold used by classify_arm_loss's absent(): 1-2 coincidental base
@@ -600,9 +612,8 @@ MIN_STEM_PAIRS = 3
 def arm_span_has_enough_sequence(aligned_seq, elem):
     """first-stage (fast, hard) filter after a stem slot is flagged absent: does
     the span contain enough nucleotides to physically form a hairpin
-    (n_stem_cols + MIN_HAIRPIN_LOOP, the steric minimum; Woodson 2008,
-    doi:10.1146/annurev.physchem.59.032607.093743)? False here means definite
-    genuine loss. True is not proof of a real arm, just not ruled out by
+    (n_stem_cols + MIN_HAIRPIN_LOOP, the steric minimum)? False here means
+    definite genuine loss. True is not proof of a real arm, just not ruled out by
     volume alone -- see arm_is_threading_failure for the required 2nd check."""
     start, end = elem["span"]
     n_nts = sum(1 for c in aligned_seq[start:end] if c not in "-.")
@@ -649,8 +660,8 @@ def patch_threading_failure_arm(aligned_seq, final_seq, final_ss, elem):
     """recover arm structure for a confirmed CM threading failure (called only
     after arm_is_threading_failure): splice elem's own RNAfold fold into
     final_ss rather than refolding the whole molecule -- full-sequence RNAfold
-    on a mt-tRNA is unreliable (tertiary contacts, modified bases; Helm 2006,
-    doi:10.1093/nar/gkl348), but a short isolated span (13-20nt) is fine.
+    on a mt-tRNA is unreliable (tertiary contacts, modified bases), but a short
+    isolated span (13-20nt) is fine.
     safety: every bracket in the fold must target a '.' in final_ss or the
     patch is aborted, since a rejected close leaves its open dangling.
     returns patched final_ss, or the original on no fold / bracket conflict /
@@ -834,59 +845,59 @@ def select_cm_and_align(header, seq, canonical_cm_tiers, armless_cm_index):
 # --- topology + Sprinzl assignment ---
 
 def parse_topology(ss):
-    """acceptor stem (first '(' run, capped at 7bp) + inner stems. does not
-    label D/C/T yet -- that needs the anticodon (see locate_anticodon_stem)."""
-    pairs = pair_table(ss)
-    n = len(ss)
-    start = next((i for i in range(n) if ss[i] == "("), None)
-    if start is None:
-        raise ValueError(f"no acceptor stem (no '(' at all) in: {ss!r}")
-    acceptor = []
-    i = start
-    while i < n and ss[i] == "(" and len(acceptor) < 7:
-        acceptor.append(i)
-        i += 1
-    acceptor_pairs = sorted(pairs[p] for p in acceptor)
-    inner_start, inner_end = acceptor[-1] + 1, acceptor_pairs[0]
-
-    inner_stems, i = [], inner_start
-    while i < inner_end:
-        if ss[i] == "(":
-            stem5 = []
-            while i < inner_end and ss[i] == "(":
-                stem5.append(i)
-                i += 1
-            inner_stems.append(stem5)
-        else:
-            i += 1
+    """acceptor stem (the one stem with no hairpin loop of its own) + inner
+    stems, via _forgi_stem_groups -- not a hand-rolled contiguous-bracket scan,
+    so a bulge or a finalize_structure-nulled pair inside a stem (e.g. the
+    acceptor's own 5' or 3' half) doesn't get split off as a phantom extra
+    stem and silently dropped from Sprinzl labeling. does not label D/C/T
+    yet -- that needs the anticodon (see locate_anticodon_stem)."""
+    groups = _forgi_stem_groups(ss)
+    acceptor = next((g for g in groups if not g["loop_cols"]), None)
+    if acceptor is None:
+        raise ValueError(f"no acceptor stem (no hairpin-less stem) in: {ss!r}")
+    inner_stems = [g for g in groups if g["loop_cols"]]
 
     return {
-        "acceptor_5": acceptor, "acceptor_3": acceptor_pairs,
-        "inner_stems": inner_stems, "inner_start": inner_start, "inner_end": inner_end,
-        "trailer": [p for p in range(acceptor_pairs[-1] + 1, n) if ss[p] == "."],
+        "acceptor_5": acceptor["stem5_cols"], "acceptor_3": acceptor["stem3_cols"],
+        "inner_stems": inner_stems,
+        "trailer": [p for p in range(acceptor["stem3_cols"][-1] + 1, len(ss)) if ss[p] == "."],
     }
 
 
-def locate_anticodon_stem(topo, ss, seq, anticodon):
+def locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm=None):
     """identify C-stem (anticodon arm) by anticodon content, D-stem = sibling
-    before C that does not enclose it, T-stem = sibling after it.
-    innermost-stem-first search order prevents a D-armless pseudostem (which
-    structurally encloses C) from being matched before the real C-stem.
-    'does not enclose' check: a pseudostem that opens before C and closes after
-    C must be excluded as D-arm candidate -- it IS the enclosing pseudostem.
-    see TestSprinzlAssignment::test_d_armless_replacement_loop_gets_d_arm_labels."""
-    pairs = pair_table(ss)
+    before C that does not enclose it, T-stem = sibling after it. inner_stems
+    is a list of _forgi_stem_groups dicts (stem5_cols/stem3_cols/loop_cols
+    already known from forgi -- no re-deriving them via pair_table here).
+    innermost-stem-first search order (smallest span first) prevents a
+    D-armless pseudostem (which structurally encloses C) from being matched
+    before the real C-stem. 'does not enclose' check: a pseudostem that opens
+    before C and closes after C must be excluded as D-arm candidate -- it IS
+    the enclosing pseudostem.
+    see TestSprinzlAssignment::test_d_armless_replacement_loop_gets_d_arm_labels.
+    when the anticodon substring happens to occur in more than one stem's loop
+    (observed on a real T-armless armless-CM alignment, two short remaining
+    loops, coincidental match in both), don't guess by span size -- use
+    missing_arm, already established via the far more reliable register-offset
+    diagnosis on the canonical alignment (classify_arm_loss), to break the tie:
+    D always precedes C, so if the T-arm is the one missing here (only D and C
+    remain) the later candidate is C; if the D-arm is missing (only C and T
+    remain) the earlier one is C. this positional rule is only valid when
+    exactly TWO stems remain -- so it is gated on len(inner_stems)==2, NOT on
+    missing_arm alone: a canonical 3-stem alignment kept as an RNAfold-patch
+    fallback still carries missing_arm=d/t from the canonical diagnosis (e.g.
+    human mt-Val), and applying a 2-stem positional shortcut to a 3-stem
+    structure would mislabel it. falls back to the smallest-span candidate
+    (previous behaviour) whenever the tie can't be safely broken this way."""
     inner_stems = topo["inner_stems"]
 
-    def full_loop(stem5):
-        return list(range(stem5[-1] + 1, pairs[stem5[-1]])) if stem5 else []
-
-    def direct_loop(idx, stem5):
+    def direct_loop(idx, group):
         # loop positions exclusive of any nested stem's span
-        lp = set(full_loop(stem5))
-        for j, other5 in enumerate(inner_stems):
-            if j != idx and stem5[-1] < other5[0] < pairs[stem5[-1]]:
-                lp -= set(range(other5[0], pairs[other5[-1]] + 1))
+        lp = set(group["loop_cols"])
+        own_close = group["stem3_cols"][0]
+        for j, other in enumerate(inner_stems):
+            if j != idx and group["stem5_cols"][-1] < other["stem5_cols"][0] < own_close:
+                lp -= set(range(other["stem5_cols"][0], other["stem3_cols"][-1] + 1))
         return sorted(lp)
 
     def unpaired(a, b):
@@ -894,32 +905,60 @@ def locate_anticodon_stem(topo, ss, seq, anticodon):
 
     ac = (anticodon or "").upper().replace("T", "U")
     search_order = sorted(range(len(inner_stems)),
-                          key=lambda i: pairs[inner_stems[i][-1]] - inner_stems[i][0])
+                          key=lambda i: inner_stems[i]["span"][1] - inner_stems[i]["span"][0])
+    matches = [idx for idx in search_order
+               if ac and ac in "".join(seq[p] for p in direct_loop(idx, inner_stems[idx]))]
 
-    c_stem, c_idx = [], None
-    for idx in search_order:
-        stem5 = inner_stems[idx]
-        if ac and ac in "".join(seq[p] for p in direct_loop(idx, stem5)):
-            c_stem, c_idx = stem5, idx
-            break
-    if c_stem is None and inner_stems:
+    c_idx = None
+    if len(matches) == 2 and len(inner_stems) == 2 and missing_arm in ("d", "t"):
+        by_position = sorted(matches, key=lambda i: inner_stems[i]["stem5_cols"][0])
+        c_idx = by_position[-1] if missing_arm == "t" else by_position[0]
+        logger.debug(f"anticodon {ac!r} matched both remaining stems; "
+                     f"disambiguated via missing_arm={missing_arm!r} -> stem {c_idx}")
+    elif len(matches) > 1 and len(inner_stems) == 3:
+        # full D-C-T cloverleaf with the anticodon substring coincidentally in
+        # more than one loop: the C-stem is the middle one by position. trust
+        # that only when the middle stem is itself a match (its loop holds the
+        # anticodon, as the real C-loop must); otherwise fall through.
+        middle = sorted(range(3), key=lambda i: inner_stems[i]["stem5_cols"][0])[1]
+        c_idx = middle if middle in matches else matches[0]
+        logger.debug(f"anticodon {ac!r} matched {len(matches)} loops in a 3-stem "
+                     f"structure; taking the middle stem -> {c_idx}")
+    elif matches:
+        c_idx = matches[0]
+    elif inner_stems:
         c_idx = search_order[0]
-        c_stem = inner_stems[c_idx]
+    c_stem = inner_stems[c_idx] if c_idx is not None else None
 
-    c_close = pairs[c_stem[-1]] if c_stem else None
-    d_stem, t_stem = [], []
+    d_stem, t_stem = None, None
+    c_close = c_stem["stem3_cols"][0] if c_stem else None
     if c_stem:
-        before = [s5 for s5 in inner_stems
-                  if s5 != c_stem and s5[0] < c_stem[0] and pairs[s5[-1]] < c_close]
-        after = [s5 for s5 in inner_stems if s5 != c_stem and s5[0] > c_close]
-        d_stem = max(before, key=len) if before else []
+        before = [g for g in inner_stems
+                  if g is not c_stem and g["stem5_cols"][0] < c_stem["stem5_cols"][0]
+                  and g["stem3_cols"][0] < c_close]
+        after = [g for g in inner_stems
+                 if g is not c_stem and g["stem5_cols"][0] > c_close]
+        d_stem = max(before, key=lambda g: len(g["stem_cols"])) if before else None
         # t-arm is the last (highest-position) stem after c-close.
         # min(after) breaks for class-ii tRNAs (ser, leu) and some mt-tRNAs
         # with a variable arm stem: it picks the variable arm as t-arm instead.
-        t_stem = max(after, key=lambda s5: s5[0]) if after else []
+        t_stem = max(after, key=lambda g: g["stem5_cols"][0]) if after else None
 
-    d_close = pairs[d_stem[-1]] if d_stem else None
-    t_open = t_stem[0] if t_stem else None
+    # outermost D-stem 3' column (strand edge), so the connector (pos 26) starts
+    # only after the whole D-stem 3' strand -- a D-stem-internal 3' bulge sits
+    # before this edge and belongs to the D-stem, same strand-boundary reasoning
+    # as the acceptor case below. using the innermost column instead would sweep
+    # that bulge into linker_dc and label it 26 ahead of the real 24/25.
+    d_stem3_end = d_stem["stem3_cols"][-1] if d_stem else None
+    t_open = t_stem["stem5_cols"][0] if t_stem else None
+
+    # acceptor STRAND boundaries, not member sets: an acceptor-internal bulge
+    # (a '.' between two paired acceptor columns) belongs to the acceptor, so
+    # var_loop/linker_5 must stop at the strand edge, not sieve out only the
+    # literal paired columns and thereby swallow the bulge (which then gets a
+    # wrong D-connector or V-loop label instead of an acceptor insertion).
+    acceptor_3_start = topo["acceptor_3"][0]   # stem3_cols is sorted ascending
+    acceptor_5_end = topo["acceptor_5"][-1]
 
     if c_close is not None and t_open is not None:
         # all positions between c-stem close and t-arm open, not filtered to
@@ -927,22 +966,37 @@ def locate_anticodon_stem(topo, ss, seq, anticodon):
         # whose paired positions must also receive sprinzl 44-48 labels.
         var_loop = list(range(c_close + 1, t_open))
     elif c_close is not None:
-        var_loop = list(range(c_close + 1, topo["inner_end"]))
+        # no T-stem: var loop runs up to where the acceptor's 3' strand begins.
+        var_loop = list(range(c_close + 1, acceptor_3_start))
     else:
         var_loop = []
 
-    linker_5_end = d_stem[0] if d_stem else (c_stem[0] if c_stem else topo["inner_end"])
+    d_stem5 = d_stem["stem5_cols"] if d_stem else []
+    c_stem5 = c_stem["stem5_cols"] if c_stem else []
+    t_stem5 = t_stem["stem5_cols"] if t_stem else []
+    linker_5_end = d_stem5[0] if d_stem else (c_stem5[0] if c_stem else acceptor_3_start)
+
+    # a short or RNAfold-patched T-stem can leave unpaired nts between its 3'
+    # end and the acceptor 3' strand; fold them into the T-stem-3' run so
+    # assign_slots numbers them (65, then 65A...) instead of leaving them blank.
+    t_stem3 = t_stem["stem3_cols"] if t_stem else []
+    if t_stem3:
+        t_stem3 = t_stem3 + [p for p in range(t_stem3[-1] + 1, acceptor_3_start) if ss[p] == "."]
 
     return {
-        "d_stem5": d_stem, "d_stem3": sorted(pairs[p] for p in d_stem) if d_stem else [],
-        "d_loop": full_loop(d_stem),
-        "c_stem5": c_stem, "c_stem3": sorted(pairs[p] for p in c_stem) if c_stem else [],
-        "c_loop": full_loop(c_stem),
-        "t_stem5": t_stem, "t_stem3": sorted(pairs[p] for p in t_stem) if t_stem else [],
-        "t_loop": full_loop(t_stem),
+        "d_stem5": d_stem5, "d_stem3": d_stem["stem3_cols"] if d_stem else [],
+        "d_loop": d_stem["loop_cols"] if d_stem else [],
+        "c_stem5": c_stem5, "c_stem3": c_stem["stem3_cols"] if c_stem else [],
+        "c_loop": c_stem["loop_cols"] if c_stem else [],
+        "t_stem5": t_stem5, "t_stem3": t_stem3,
+        "t_loop": t_stem["loop_cols"] if t_stem else [],
         "var_loop": var_loop,
-        "linker_5": unpaired(topo["inner_start"], linker_5_end),
-        "linker_dc": unpaired(d_close + 1, c_stem[0]) if (d_close is not None and c_stem) else [],
+        # starts AFTER the acceptor's 5' strand ends: an acceptor-internal 5'
+        # bulge sits before that edge and belongs to the acceptor, not the
+        # linker (which otherwise mislabels it as a D-arm connector 8/9, or in
+        # the D-armless case as a replacement-loop 8-26 position).
+        "linker_5": unpaired(acceptor_5_end + 1, linker_5_end),
+        "linker_dc": unpaired(d_stem3_end + 1, c_stem5[0]) if (d_stem3_end is not None and c_stem) else [],
     }
 
 
@@ -958,13 +1012,16 @@ def assign_slots(labels, positions, slots):
             labels[pos] = f"{anchor}{letter}"
 
 
-def sprinzl_map(ss, seq, anticodon):
+def sprinzl_map(ss, seq, anticodon, missing_arm=None):
     """assign a Sprinzl label to every nucleotide index; returns {seq_index: label}.
     D-armless tRNAs: replacement loop (all of linker_5) is mapped onto D-arm Sprinzl
-    positions 8-26 by structural analogy, following Ozerova et al. 2024 (PMC11571959).
-    missing T-arm produces no labels for its region."""
+    positions 8-26 by structural analogy, following Ozerova et al. 2024.
+    missing T-arm produces no labels for its region. missing_arm (from
+    classify_arm_loss's diagnosis on the canonical alignment, if this sequence was
+    rerouted) is passed through to locate_anticodon_stem to break a same-content
+    anticodon-match tie -- see its docstring."""
     topo = parse_topology(ss)
-    arms = locate_anticodon_stem(topo, ss, seq, anticodon)
+    arms = locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm)
     labels = {}
     assign_slots(labels, topo["acceptor_5"], [str(i) for i in range(1, 8)])
     assign_slots(labels, topo["acceptor_3"], [str(i) for i in range(66, 73)])
@@ -994,7 +1051,45 @@ def sprinzl_map(ss, seq, anticodon):
     assign_slots(labels, arms["t_stem5"],    [str(i) for i in range(49, 54)])
     assign_slots(labels, arms["t_loop"],     [str(i) for i in range(54, 61)])
     assign_slots(labels, arms["t_stem3"],    [str(i) for i in range(61, 66)])
+
+    # strand ranges (first..last paired column of each stem strand) -- a
+    # single-sided bulge is an unpaired column WITHIN one of these, which forgi
+    # leaves outside the stem's own stem/loop columns. pass them so
+    # _fill_stem_bulges only fills positions a stem actually owns.
+    strands = [topo["acceptor_5"], topo["acceptor_3"]]
+    for g in topo["inner_stems"]:
+        strands += [g["stem5_cols"], g["stem3_cols"]]
+    _fill_stem_bulges(labels, ss, strands)
     return labels
+
+
+def _fill_stem_bulges(labels, ss, strands):
+    """a single-sided bulge inside a stem (see _forgi_stem_groups: the bulged
+    nucleotide sits outside the merged stem's own stem/loop columns, by
+    construction) is a real nucleotide with no named Sprinzl slot -- letter-
+    suffix it onto the preceding assigned position, the same insertion-code
+    convention assign_slots uses for trailing overhangs (60A, ...). ownership
+    is checked against `strands` (each stem strand's first..last column span):
+    only an unlabeled '.' that a stem actually spans counts as a bulge. every
+    such bulge in real mt-tRNA data is a cmalign insert column (#=GC RF == '.'),
+    never a model-consensus position, and the Sprinzl scheme has no canonical
+    number for a stem bulge, so a suffix is the right label. mutates labels in
+    place. an unlabeled '.' outside every stem strand, or any unlabeled paired
+    column, is left alone so a different bug surfaces here rather than getting
+    silently patched over."""
+    owned = set()
+    for strand in strands:
+        if strand:
+            owned |= set(range(min(strand), max(strand) + 1))
+    last_label, next_ord = None, {}
+    for i, c in enumerate(ss):
+        if i in labels:
+            last_label = labels[i]
+        elif c == "." and i in owned and last_label is not None:
+            n = next_ord.get(last_label, 0)
+            next_ord[last_label] = n + 1
+            letter = chr(ord("A") + n) if n < 26 else f"A{chr(ord('A') + n - 26)}"
+            labels[i] = f"{last_label}{letter}"
 
 
 # --- per-sequence worker: bundled for multiprocessing.Pool.map ---
@@ -1036,9 +1131,14 @@ def process_one_record(args):
     if anticodon is None:
         logger.warning(f"{header}: no anticodon in header; C-stem location unreliable")
 
-    sprinzl = sprinzl_map(final_ss, final_seq, anticodon)
-
     diagnosis = routing["diagnosis"] or {}
+    sprinzl = sprinzl_map(final_ss, final_seq, anticodon, diagnosis.get("missing_arm"))
+
+    unlabeled = [i for i in range(len(final_seq)) if i not in sprinzl]
+    if unlabeled:
+        logger.warning(f"{header}: {len(unlabeled)} position(s) left without a Sprinzl "
+                       f"number at seq index {unlabeled}; output rows for them are blank")
+
     cm_name = routing["cm_used"] or "NONE"
     if cm_name not in ("RNAfold", "NONE"):
         cm_name = os.path.basename(cm_name)
@@ -1159,10 +1259,10 @@ def _flip_panel_north(panel, width, height):
     template-free layout engine R2DT uses here) always draws the acceptor
     stem at the bottom, with no orientation flag exposed to change that --
     confirmed consistent across every sequence/shape checked, so a single
-    unconditional flip suffices. this is a vertical mirror, not a 180-degree
-    rotation: a rotation negates x too, which would swing every side arm from
-    east to west as a side effect -- mirroring y alone moves the acceptor
-    stem to the top while leaving east/west exactly where R2R put them.
+    unconditional flip suffices. mirror y only -- a full 180-degree rotation
+    would negate x too and swing every side arm from east to west; mirroring y
+    alone moves the acceptor stem to the top while leaving east/west exactly
+    where R2R put them.
     every <text> glyph gets its own counter-mirror about its own y: two
     y-mirrors about different lines compose into a pure translation, so the
     glyph itself stays upright while still landing at its correctly-mirrored
