@@ -49,9 +49,23 @@ def load_fa(name):
 
 
 def _key(lbl):
-    """sort key ordering '23' < '23A' < '23B' < '24'."""
+    """sort key ordering '23' < '23A' < '23B' < '24', and placing variable-arm
+    'e' labels (class-ii: Leu, Ser) between 45 and 46 in true 5'->3' order:
+    e11-e17 (5' stem), then e1-e5 (loop), then e21-e27 (3' stem) -- the 3'
+    stem is numbered in reverse as written (e27 comes before e21 reading
+    5'->3'), so its rank needs negating or e27 would sort after e21."""
+    m = re.match(r"e(\d)(\d)?([a-zA-Z]*)$", lbl)
+    if m:
+        d1, d2, suffix = m.group(1), m.group(2), m.group(3)
+        if d2 is None:
+            rank, order = 1, int(d1)
+        elif d1 == "1":
+            rank, order = 0, int(d2)
+        else:
+            rank, order = 2, -int(d2)
+        return (45, 1, rank, order, suffix)
     m = re.match(r"(\d+)([a-zA-Z]*)", lbl)
-    return (int(m.group(1)), m.group(2))
+    return (int(m.group(1)), 0, 0, 0, m.group(2))
 
 
 def _monotonic(sprinzl):
@@ -60,7 +74,7 @@ def _monotonic(sprinzl):
 
 
 def _region(label):
-    base = re.match(r"\d+", label).group() if label else None
+    base = re.match(r"e?\d+", label).group() if label else None
     return sprinx.SPRINZL_REGION.get(base)
 
 
@@ -224,8 +238,46 @@ def test_sprinzl_map_real_data_invariants():
         if missing_arm == "d":
             # option A (Ozerova et al. 2024): the D-armless replacement loop maps
             # onto Sprinzl 8-26 by structural analogy, even with no D-stem pairs.
-            labeled = {int(re.match(r"\d+", v).group()) for v in sprinzl.values()}
+            labeled = {int(re.match(r"\d+", v).group()) for v in sprinzl.values() if not v.startswith("e")}
             assert any(10 <= p <= 25 for p in labeled), f"{tag}: no D-arm labels"
+
+
+def test_c_stem3_labels_not_overwritten_by_var_loop():
+    """regression for a real, previously-silent bug: c_close (the boundary
+    var_loop starts from) used stem3_cols[0] -- the INNERMOST c-stem-3
+    column, adjacent to the loop -- instead of stem3_cols[-1], the outermost
+    column where the c-stem actually ends. var_loop's own assign_slots call
+    then overwrote the real c-stem-3 columns' correct labels (40-43) with
+    wrong ones (44-47). monotonicity alone never caught this since both
+    runs are still increasing, just shifted -- this checks against the
+    known-correct values directly."""
+    seqs, ss_cons = load_sto("aln_E_canonical_qutrna.sto")
+    name = next(k for k in seqs if "Glu|UUC|Homo" in k)
+    seq, ss = sprinx.finalize_structure({"aligned_seq": seqs[name], "ss_cons": ss_cons})
+    topo = sprinx.parse_topology(ss)
+    c_stem3 = topo["inner_stems"][1]["stem3_cols"]
+    sprinzl = sprinx.sprinzl_map(ss, seq, "UUC", None)
+    assert [sprinzl[p] for p in c_stem3] == ["39", "40", "41", "42", "43"]
+
+
+def test_variable_arm_stem_gets_e_series_labels():
+    """real class-ii case (S. cerevisiae mt-Tyr): a genuine nested variable-
+    arm stem-loop between the c-arm and t-arm must get the Sprinzl e-series
+    (e11-e17 stem/e1-e5 loop/e21-e27 stem, paired e1N<->e2N), not the plain
+    44-48 sequential run -- and every e-labelled base must actually be
+    complementary to its declared pairing partner, not just present."""
+    seqs, ss_cons = load_sto("aln_canonical36_qutrna_flags.sto")
+    name = next(k for k in seqs if "Tyr|GUA|Saccharomyces" in k)
+    seq, ss = sprinx.finalize_structure({"aligned_seq": seqs[name], "ss_cons": ss_cons})
+    sprinzl = sprinx.sprinzl_map(ss, seq, "GUA", None)
+    assert [i for i in range(len(seq)) if i not in sprinzl] == []
+    assert _monotonic(sprinzl)
+
+    by_label = {v: seq[k] for k, v in sprinzl.items()}
+    assert {"e11", "e12", "e13", "e1", "e2", "e3", "e4", "e23", "e22", "e21"} <= set(by_label)
+    for n in (1, 2, 3):
+        pair = (by_label[f"e1{n}"], by_label[f"e2{n}"])
+        assert pair in sprinx.WC_PAIRS, f"e1{n}/e2{n} not complementary: {pair}"
 
 
 def test_assign_anticodon_loop_anchors_on_anticodon_not_loop_edge():

@@ -154,6 +154,9 @@ for _p in range(32, 39):  SPRINZL_REGION[str(_p)] = "C_loop"
 for _p in range(39, 44):  SPRINZL_REGION[str(_p)] = "C_stem_3"
 for _p in (44, 45):       SPRINZL_REGION[str(_p)] = "V_loop"
 for _p in range(46, 49):  SPRINZL_REGION[str(_p)] = "V_loop"
+for _p in range(1, 8):    SPRINZL_REGION[f"e1{_p}"] = "V_stem_5"
+for _p in range(1, 6):    SPRINZL_REGION[f"e{_p}"] = "V_loop"
+for _p in range(1, 8):    SPRINZL_REGION[f"e2{_p}"] = "V_stem_3"
 for _p in range(49, 54):  SPRINZL_REGION[str(_p)] = "T_stem_5"
 for _p in range(54, 61):  SPRINZL_REGION[str(_p)] = "T_loop"
 for _p in range(61, 66):  SPRINZL_REGION[str(_p)] = "T_stem_3"
@@ -1055,8 +1058,15 @@ def locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm=None):
         c_idx = search_order[0]
     c_stem = inner_stems[c_idx] if c_idx is not None else None
 
-    d_stem, t_stem = None, None
-    c_close = c_stem["stem3_cols"][0] if c_stem else None
+    d_stem, t_stem, v_stem = None, None, None
+    # outermost (last) column of the c-stem 3' strand -- stem3_cols[0] is the
+    # INNERMOST column (adjacent to the loop); using it here was a real bug:
+    # var_loop's boundary must start after the whole c-stem ends, not after
+    # its first (innermost) column, or var_loop's own assign_slots call
+    # silently overwrites the c-stem-3 columns between [0] and [-1] with wrong
+    # (var-loop) labels -- confirmed on real data (e.g. mt-Glu): columns that
+    # should be Sprinzl 40-43 (c_stem3) were coming out as 44-47 (var_loop).
+    c_close = c_stem["stem3_cols"][-1] if c_stem else None
     if c_stem:
         before = [g for g in inner_stems
                   if g is not c_stem and g["stem5_cols"][0] < c_stem["stem5_cols"][0]
@@ -1068,6 +1078,14 @@ def locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm=None):
         # min(after) breaks for class-ii tRNAs (ser, leu) and some mt-tRNAs
         # with a variable arm stem: it picks the variable arm as t-arm instead.
         t_stem = max(after, key=lambda g: g["stem5_cols"][0]) if after else None
+        # a genuine variable-ARM stem (class-ii: Leu, Ser) is whatever's left
+        # in `after` besides t_stem -- only trusted when exactly one such
+        # candidate remains; with a single "after" candidate there's no way
+        # to tell a bare variable arm from a missing T-arm from topology
+        # alone, so that ambiguous case is left to the existing missing_arm
+        # machinery (classify_arm_loss) rather than guessed at here.
+        v_candidates = [g for g in after if g is not t_stem]
+        v_stem = v_candidates[0] if len(v_candidates) == 1 else None
 
     # outermost D-stem 3' column (strand edge), so the connector (pos 26) starts
     # only after the whole D-stem 3' strand -- a D-stem-internal 3' bulge sits
@@ -1085,16 +1103,30 @@ def locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm=None):
     acceptor_3_start = topo["acceptor_3"][0]   # stem3_cols is sorted ascending
     acceptor_5_end = topo["acceptor_5"][-1]
 
-    if c_close is not None and t_open is not None:
-        # all positions between c-stem close and t-arm open, not filtered to
-        # unpaired: class-ii tRNAs have a variable arm stem in this region
-        # whose paired positions must also receive sprinzl 44-48 labels.
-        var_loop = list(range(c_close + 1, t_open))
-    elif c_close is not None:
-        # no T-stem: var loop runs up to where the acceptor's 3' strand begins.
-        var_loop = list(range(c_close + 1, acceptor_3_start))
-    else:
+    var_end = t_open if t_open is not None else (acceptor_3_start if c_close is not None else None)
+
+    # class-ii variable ARM (Leu, Ser): a real nested stem-loop between the
+    # c-arm and t-arm gets the Sprinzl e-series (e11-e17/e1-e5/e21-e27), not
+    # the plain 44-48 sequential run -- see sprinzl_map. ct_linker/vt_linker
+    # are the (up to 2 / up to 3) genuinely unpaired nt flanking the v-stem
+    # on either side; var_loop is the no-v-stem fallback (class-i short loop,
+    # or no stem detected), using the previous flat 44-48 behaviour unchanged.
+    v_stem5 = v_stem["stem5_cols"] if v_stem else []
+    v_loop = v_stem["loop_cols"] if v_stem else []
+    v_stem3 = v_stem["stem3_cols"] if v_stem else []
+    if v_stem and c_close is not None and var_end is not None:
+        ct_linker = list(range(c_close + 1, v_stem5[0]))
+        vt_linker = list(range(v_stem3[-1] + 1, var_end))
         var_loop = []
+    else:
+        ct_linker = vt_linker = []
+        if c_close is not None and var_end is not None:
+            # all positions between c-stem close and t-arm open, not filtered to
+            # unpaired: a variable arm stem's paired positions (when not split
+            # out above) must still receive sprinzl 44-48 labels.
+            var_loop = list(range(c_close + 1, var_end))
+        else:
+            var_loop = []
 
     d_stem5 = d_stem["stem5_cols"] if d_stem else []
     c_stem5 = c_stem["stem5_cols"] if c_stem else []
@@ -1116,6 +1148,8 @@ def locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm=None):
         "t_stem5": t_stem5, "t_stem3": t_stem3,
         "t_loop": t_stem["loop_cols"] if t_stem else [],
         "var_loop": var_loop,
+        "ct_linker": ct_linker, "vt_linker": vt_linker,
+        "v_stem5": v_stem5, "v_loop": v_loop, "v_stem3": v_stem3,
         # starts AFTER the acceptor's 5' strand ends: an acceptor-internal 5'
         # bulge sits before that edge and belongs to the acceptor, not the
         # linker (which otherwise mislabels it as a D-arm connector 8/9, or in
@@ -1206,7 +1240,25 @@ def sprinzl_map(ss, seq, anticodon, missing_arm=None):
     assign_slots(labels, arms["c_stem5"],    [str(i) for i in range(27, 32)])
     _assign_anticodon_loop(labels, seq, arms["c_loop"], anticodon)
     assign_slots(labels, arms["c_stem3"],    [str(i) for i in range(39, 44)])
-    assign_slots(labels, arms["var_loop"],   ["44", "45", "46", "47", "48"])
+    if arms["v_stem5"]:
+        # class-ii variable ARM (Leu, Ser): real nested stem-loop, Sprinzl
+        # e-series -- see locate_anticodon_stem's v_stem docstring. reserved
+        # space is 7bp/5nt/7bp; anything beyond overflows via assign_slots'
+        # usual letter-suffix mechanism (e.g. 'e17A'), same as every other
+        # insertion-code slot in this scheme.
+        # right-aligned on 45 (immediately before e11), same reasoning as
+        # _assign_anticodon_loop's "before" segment: a single linker nt here
+        # is adjacent to the stem and must get 45, not 44.
+        ct_slots = ([str(i) for i in range(46 - len(arms["ct_linker"]), 46)]
+                    if len(arms["ct_linker"]) <= 2 else ["44", "45"])
+        assign_slots(labels, arms["ct_linker"], ct_slots)
+        assign_slots(labels, arms["v_stem5"],   [f"e1{i}" for i in range(1, 8)])
+        assign_slots(labels, arms["v_loop"],    [f"e{i}" for i in range(1, 6)])
+        n3 = min(len(arms["v_stem3"]), 7)
+        assign_slots(labels, arms["v_stem3"],   [f"e2{k}" for k in range(n3, 0, -1)])
+        assign_slots(labels, arms["vt_linker"], ["46", "47", "48"])
+    else:
+        assign_slots(labels, arms["var_loop"], ["44", "45", "46", "47", "48"])
     assign_slots(labels, arms["t_stem5"],    [str(i) for i in range(49, 54)])
     assign_slots(labels, arms["t_loop"],     [str(i) for i in range(54, 61)])
     assign_slots(labels, arms["t_stem3"],    [str(i) for i in range(61, 66)])
@@ -1321,7 +1373,11 @@ def process_one_record(args):
     rows = []
     for i, base in enumerate(final_seq):
         label = sprinzl.get(i, "")
-        region_key = re.match(r"\d+", label).group() if label else ""
+        # 'e'-prefixed variable-arm labels (e11, e1, e23, ...) aren't purely
+        # numeric like every other slot -- match the optional 'e' along with
+        # the digits so an overflow-suffixed one (e17A) still resolves to its
+        # base code (e17) for the region lookup, same as '60A' -> '60' does.
+        region_key = re.match(r"e?\d+", label).group() if label else ""
         rows.append({
             "seq_id": header, "seq_index": i, "nucleotide": base,
             "sprinzl_position": label, "region": SPRINZL_REGION.get(region_key, ""),
