@@ -19,10 +19,15 @@ sprinx.py -- Sprinzl-coordinate annotation for mt-tRNAs.
 3. pipeline
    a. align to a canonical CM with cmalign --notrunc --nonbanded -g. --canonical-cm
       accepts multiple sources tried in priority order (e.g. bacterial whole-family
-      CM, then a metazoan per-AA directory); the first whose anticodon anchors
-      unambiguously wins -- never by score/E-value, see (2) -- because a CM built
-      for the wrong clade can fail to thread a divergent sequence at all. details
-      in select_cm_and_align.
+      CM, then a metazoan per-AA directory); the first tier whose anticodon anchors
+      unambiguously and threads its own stem to the full canonical 5bp wins,
+      but a short thread never disqualifies a tier outright -- a real anticodon
+      stem can genuinely be shorter than 5bp, so the best-threaded anchored tier
+      is kept and used if no later tier does better. never by score/E-value,
+      see (2) -- a CM built for the wrong clade can fail to thread a divergent
+      sequence at all, or mis-thread the otherwise-invariant anticodon stem
+      specifically even when the anticodon itself anchors. details in
+      select_cm_and_align.
    b. anchor on the anticodon; a missing UPSTREAM arm (D-arm) shifts remaining
       structure into wrong model columns (register shift). missing DOWNSTREAM
       arm (T-arm) does not shift. measure offset = expected_anticodon_slot - observed.
@@ -66,8 +71,14 @@ sprinx.py -- Sprinzl-coordinate annotation for mt-tRNAs.
    header format (pipe-delimited):
      field 1: seq id | field 2: three-letter aa (e.g. Ala, Leu1)
      field 3: anticodon (3nt, RNA or DNA) | field 4: taxon
-     fallback: 'anticodon=XXX' tag anywhere in the header.
-     field 3 is the primary key for CM selection; field 2 only identifies aa.
+     fallback 1: 'anticodon=XXX' tag anywhere in the header.
+     fallback 2: GtRNAdb-style 'tRNA-{AA}-{anticodon}' name anywhere in the
+     header (e.g. mt-tRNA-Ala-TGC-1-1); aa has no isoacceptor digit in this
+     convention (Leu/Ser cover both isoacceptors), so aa_field_to_cm_code
+     returns the bare code and CM selection disambiguates by anticodon anchor
+     (_pick_by_anticodon_anchor), same as filename-suffixed isoacceptor CMs.
+     field 3 (or the fallback anticodon) is the primary key for CM selection;
+     field 2 (or the fallback aa) only identifies aa.
    armless CM filenames: armless_trn{AA}_wo_{arm}.cm where arm is d, t, or d_and_t
    for doubly-armless (Ozerova et al. 2024). armless CM rerouting
    is unaffected by which canonical CM tier won above -- it only triggers once
@@ -182,23 +193,34 @@ def drop_orphan_brackets(ss):
     return "".join(ss)
 
 
+HEADER_TRNA_NAME_RE = re.compile(r"tRNA-([A-Za-z]{3})-([ACGTUacgtu]{3})")
+
+
 def header_to_anticodon(header):
-    """extract anticodon from 'id|aa|anticodon|taxon' (field 3) or 'anticodon=XXX'
-    tag anywhere in the header. returns 3-nt RNA string or None; returns None
-    rather than guessing on format mismatch -- a wrong anticodon propagates
-    through the entire Sprinzl assignment."""
+    """extract anticodon from 'id|aa|anticodon|taxon' (field 3), 'anticodon=XXX'
+    tag, or a GtRNAdb-style 'tRNA-{AA}-{anticodon}' name (e.g.
+    'mt-tRNA-Ala-TGC-1-1') anywhere in the header. returns 3-nt RNA string or
+    None; returns None rather than guessing on format mismatch -- a wrong
+    anticodon propagates through the entire Sprinzl assignment."""
     fields = header.split("|")
     if len(fields) >= 3 and re.fullmatch(r"[ACGUTacgut]{3}", fields[2]):
         return fields[2].upper().replace("T", "U")
     m = re.search(r"anticodon=([ACGUTacgut]{3})", header)
-    return m.group(1).upper().replace("T", "U") if m else None
+    if m:
+        return m.group(1).upper().replace("T", "U")
+    m = HEADER_TRNA_NAME_RE.search(header)
+    return m.group(2).upper().replace("T", "U") if m else None
 
 
 def aa_field_to_cm_code(aa_field, cm_index_keys):
     """header aa field (e.g. 'Ala', 'Leu1') -> one-letter CM code (e.g. 'A', 'L1').
     derivation: strip digit suffix, protein_letters_3to1 (IUPAC 1984), reattach
-    suffix, check against cm_index_keys. returns None if code absent from index.
-    isoacceptor disambiguation uses the anticodon (resolve_armless_cm), not this."""
+    suffix, check against cm_index_keys. a bare aa field with no isoacceptor
+    digit (e.g. 'Leu' from a GtRNAdb-style header, which never numbers
+    isoacceptors) is returned as-is if it matches the digit-stripped form of
+    one or more index entries, so the caller can disambiguate by anticodon
+    (resolve_armless_cm, _resolve_canonical_for_tier) instead of failing here.
+    returns None if the code matches nothing in the index at all."""
     if not aa_field:
         return None
     m = re.fullmatch(r"([A-Za-z]+)(\d*)", aa_field.strip())
@@ -208,13 +230,21 @@ def aa_field_to_cm_code(aa_field, cm_index_keys):
     if one is None:
         return None
     code = one + m.group(2)
-    return code if code in {aa for aa, _ in cm_index_keys} else None
+    keys = {aa for aa, _ in cm_index_keys}
+    if code in keys or any(k.rstrip("0123456789") == code for k in keys):
+        return code
+    return None
 
 
 def header_to_aa(header):
-    """return the raw aa field (second pipe-delimited field) or None."""
+    """return the aa field: the second pipe-delimited field, or (fallback) the
+    aa name from a GtRNAdb-style 'tRNA-{AA}-{anticodon}' header. None if
+    neither is present."""
     fields = header.split("|")
-    return fields[1].strip() if len(fields) >= 2 and fields[1].strip() else None
+    if len(fields) >= 2 and fields[1].strip():
+        return fields[1].strip()
+    m = HEADER_TRNA_NAME_RE.search(header)
+    return m.group(1) if m else None
 
 
 def header_to_taxon(header):
@@ -283,15 +313,29 @@ def index_canonical_cms(cm_dir):
     return index
 
 
-def _resolve_canonical_for_tier(header, tier):
+def _resolve_canonical_for_tier(header, seq, tier):
     """resolve one canonical-CM tier to a concrete .cm path for this header, or
     None if the tier doesn't apply (a per-AA dict with no entry for this aa).
     a plain path string tier applies unconditionally (e.g. a whole-family CM
-    like TRNAinf-bact.cm, which models every amino acid with one CM)."""
-    if isinstance(tier, dict):
-        aa_code = aa_field_to_cm_code(header_to_aa(header), {(aa, None) for aa in tier})
-        return tier.get(aa_code)
-    return tier
+    like TRNAinf-bact.cm, which models every amino acid with one CM). a bare
+    aa code that matches more than one same-base entry (e.g. a GtRNAdb-style
+    header's 'Leu' resolving to both L1 and L2, since that naming never
+    carries an isoacceptor digit) is disambiguated by anticodon anchor via
+    _pick_by_anticodon_anchor, the same approach resolve_armless_cm uses."""
+    if not isinstance(tier, dict):
+        return tier
+    aa_code = aa_field_to_cm_code(header_to_aa(header), {(aa, None) for aa in tier})
+    if aa_code is None:
+        return None
+    if aa_code in tier:
+        return tier[aa_code]
+    candidates = [path for code, path in tier.items()
+                  if code.rstrip("0123456789") == aa_code.rstrip("0123456789")]
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+    return _pick_by_anticodon_anchor(header, seq, header_to_anticodon(header), candidates)
 
 
 # --- cmalign: one call per (sequence, CM), gapped alignment kept for classify_arm_loss ---
@@ -608,6 +652,17 @@ MIN_HAIRPIN_LOOP = 3
 # check before any reroute happens.
 MIN_STEM_PAIRS = 3
 
+# full canonical anticodon-stem length. NOT a hard minimum -- a real anticodon
+# stem can genuinely thread as few as ~3 pairs, so a short count is never
+# grounds to reject a tier (that would misfire on real biology). used only as
+# a preference signal in select_cm_and_align: among tiers that anchor the
+# anticodon cleanly, keep checking for one that reaches this full count rather
+# than settling for the first anchor, since a poorly-fitting CM can mis-thread
+# even an always-present stem while still anchoring the anticodon itself.
+# confirmed on real data (mt-Cys): TRNAinf-bact.cm threads only 3 of 5 pairs;
+# Metazoa_C.cm threads all 5 for the identical sequence.
+ANTICODON_STEM_PAIRS = 5
+
 
 def arm_span_has_enough_sequence(aligned_seq, elem):
     """first-stage (fast, hard) filter after a stem slot is flagged absent: does
@@ -656,33 +711,58 @@ def arm_is_threading_failure(aligned_seq, final_seq, elem):
     return arm_ss is not None and "(" in arm_ss
 
 
-def patch_threading_failure_arm(aligned_seq, final_seq, final_ss, elem):
+def patch_threading_failure_arm(header, aligned_seq, final_seq, final_ss, elem):
     """recover arm structure for a confirmed CM threading failure (called only
     after arm_is_threading_failure): splice elem's own RNAfold fold into
     final_ss rather than refolding the whole molecule -- full-sequence RNAfold
     on a mt-tRNA is unreliable (tertiary contacts, modified bases), but a short
     isolated span (13-20nt) is fine.
-    safety: every bracket in the fold must target a '.' in final_ss or the
-    patch is aborted, since a rejected close leaves its open dangling.
-    returns patched final_ss, or the original on no fold / bracket conflict /
-    unbalanced result (safety net)."""
+    the span is cleared before the fold is written in: cmalign's own structure
+    inside a flagged-as-failed span is exactly what's untrustworthy here (that's
+    why arm_is_threading_failure fired), so a stray weak bracket that survived
+    it (below MIN_STEM_PAIRS but still non-'.') must not be able to block the
+    very patch meant to replace it -- observed on real data (mt-Cys under
+    TRNAinf-bact.cm), where a single leftover pair blocked a 3bp D-stem
+    RNAfold found that agreed with it and simply extended it. a bracket
+    OUTSIDE the span whose partner falls INSIDE it would dangle once the span
+    is cleared, so that partner is cleared too. both overrides are logged as
+    ONE consolidated warning (not one line per position, and not debug-only):
+    this is RNAfold overruling cmalign's own structural call, not merely
+    filling in a gap, and it can in principle reach outside the span this
+    function is actually meant to patch -- header identifies which sequence,
+    since worker processes interleave in a multi-sequence run.
+    returns patched final_ss, or the original on no fold / unbalanced result
+    (safety net)."""
     ungapped_positions, arm_ss = _arm_full_span_subseq_and_fold(aligned_seq, final_seq, elem)
 
     if ungapped_positions is None or "(" not in arm_ss:
         return final_ss
 
-    # pre-validate: every bracket in arm_ss must target a '.' in final_ss.
-    # a rejected close leaves its matching open dangling -> unbalanced.
+    span = set(ungapped_positions)
+    pt = RNA.ptable(final_ss)
     ss_list = list(final_ss)
-    for i, c in enumerate(arm_ss):
-        if c in "()" and i < len(ungapped_positions):
-            if ss_list[ungapped_positions[i]] != ".":
-                logger.debug(
-                    f"arm patch aborted: arm_ss[{i}]={c!r} targets "
-                    f"final_ss[{ungapped_positions[i]}]="
-                    f"{ss_list[ungapped_positions[i]]!r}; span overlaps existing structure"
-                )
-                return final_ss
+    overridden, cleared_external = [], []
+    for pos in ungapped_positions:
+        if ss_list[pos] != ".":
+            overridden.append((pos, ss_list[pos]))
+        partner = pt[pos + 1] - 1
+        if partner >= 0 and partner not in span:
+            cleared_external.append(partner)
+            ss_list[partner] = "."   # would otherwise dangle once span is cleared
+        ss_list[pos] = "."
+
+    if overridden or cleared_external:
+        old_span = "".join(final_ss[p] for p in ungapped_positions)
+        logger.warning(
+            f"{header}: RNAfold patch overrode cmalign's own structure -- "
+            f"span positions {ungapped_positions[0]}-{ungapped_positions[-1]}: "
+            f"old={old_span!r} -> new={arm_ss!r}; "
+            f"{len(overridden)} bracket(s) inside the span replaced "
+            f"({overridden}); "
+            + (f"{len(cleared_external)} bracket(s) outside the span also cleared "
+               f"to avoid dangling ({cleared_external})" if cleared_external
+               else "none outside the span affected")
+        )
 
     for i, ungapped_pos in enumerate(ungapped_positions):
         if i < len(arm_ss):
@@ -698,12 +778,32 @@ def patch_threading_failure_arm(aligned_seq, final_seq, final_ss, elem):
     return patched
 
 
+def _pick_by_anticodon_anchor(header, seq, anticodon, candidates):
+    """given >=2 CM paths that could all serve the same (ambiguous) aa code,
+    align to each and keep whichever anchors the header's anticodon in its own
+    anticodon loop -- the anticodon is the discriminating fact, not filename or
+    dict-key suffix. shared by resolve_armless_cm (Leu1/Leu2, Ser1/Ser2
+    filenames) and _resolve_canonical_for_tier (same ambiguity, but from a
+    bare GtRNAdb-style aa field with no isoacceptor digit at all). falls back
+    to the first candidate, logged, if none anchor or no anticodon is known."""
+    if anticodon:
+        for path in candidates:
+            aln = cmalign_one(header, seq, path)
+            if aln is None:
+                continue
+            elements = get_stem_loop_elements(aln["ss_cons"])
+            if find_anticodon_stem_index(aln["aligned_seq"], elements, anticodon)[0] is not None:
+                logger.debug(f"{header}: isoacceptor {anticodon} -> {os.path.basename(path)}")
+                return path
+    logger.warning(f"{header}: isoacceptor disambiguation failed among "
+                   f"{[os.path.basename(p) for p in candidates]}; using first")
+    return candidates[0]
+
+
 def resolve_armless_cm(header, seq, aa_code, missing_arm, anticodon, armless_cm_index):
     """pick the correct armless CM for this sequence and arm type. if multiple
-    isoacceptor CMs share the same base aa code (Leu1/Leu2, Ser1/Ser2), align to
-    each and return the one where the header anticodon lands in the anticodon loop.
-    the anticodon is the discriminating fact, not filename suffix. falls back to
-    first candidate on disambiguation failure; returns None if no CM exists."""
+    isoacceptor CMs share the same base aa code (Leu1/Leu2, Ser1/Ser2), disambiguate
+    by anticodon anchor (_pick_by_anticodon_anchor). returns None if no CM exists."""
     if aa_code is None:
         return None
     candidates = [
@@ -714,18 +814,7 @@ def resolve_armless_cm(header, seq, aa_code, missing_arm, anticodon, armless_cm_
         return None
     if len(candidates) == 1:
         return candidates[0]
-    if anticodon:
-        for path in candidates:
-            aln = cmalign_one(header, seq, path)
-            if aln is None:
-                continue
-            elements = get_stem_loop_elements(aln["ss_cons"])
-            if find_anticodon_stem_index(aln["aligned_seq"], elements, anticodon)[0] is not None:
-                logger.debug(f"{header}: isoacceptor {anticodon} -> {os.path.basename(path)}")
-                return path
-    logger.warning(f"{header}: anticodon disambiguation failed for aa={aa_code!r} arm={missing_arm!r}; "
-                   f"using {os.path.basename(candidates[0])}")
-    return candidates[0]
+    return _pick_by_anticodon_anchor(header, seq, anticodon, candidates)
 
 
 def _routing_result(final_alignment, cm_used, diagnosis, rerouted=False, threading_failure_elem=None):
@@ -739,10 +828,20 @@ def select_cm_and_align(header, seq, canonical_cm_tiers, armless_cm_index):
     """top-level CM selection for one sequence.
     1. try each canonical CM tier in order (e.g. bacterial whole-family CM
        first -- mitochondria's endosymbiotic origin -- then a metazoan per-AA
-       directory); first clean anticodon anchor wins. never by score/E-value
-       across tiers (module docstring section 2). a tier that doesn't apply to
-       this aa, or whose cmalign fails, is skipped; if none anchor cleanly,
-       fall back to the first tier that aligned at all.
+       directory); never by score/E-value across tiers (module docstring
+       section 2). a clean anticodon anchor is necessary but not sufficient:
+       the anticodon stem's own length (ANTICODON_STEM_PAIRS) is a structural
+       invariant a poorly-fitting CM can still mis-thread even when the
+       anchor itself is clean (see mt-Cys: TRNAinf-bact.cm threads 3/5,
+       Metazoa_C.cm threads 5/5, identical sequence) -- but a real anticodon
+       stem can also genuinely be shorter than 5bp, so a short thread is never
+       grounds to reject a tier outright. instead: keep the anchored tier
+       with the fullest thread seen among tiers tried so far, stop as soon as
+       one reaches the full canonical count, and accept the best available if
+       none do -- preferring better evidence when the tiers on offer actually
+       provide it, never disqualifying a real anchor. a tier that doesn't
+       apply to this aa, or whose cmalign fails, is skipped; if none anchor
+       at all, fall back to the first tier that aligned.
     2. no arm missing (or only variable arm): return the canonical alignment.
     3. D-arm (no register shift) or T-arm flagged absent: cross-check with
        arm_span_has_enough_sequence then arm_is_threading_failure before
@@ -759,9 +858,10 @@ def select_cm_and_align(header, seq, canonical_cm_tiers, armless_cm_index):
     if isinstance(canonical_cm_tiers, (str, dict)):
         canonical_cm_tiers = [canonical_cm_tiers]
 
-    canonical_alignment = canonical_cm = diagnosis = None
+    canonical_alignment = canonical_cm = diagnosis = best_c_pairs = None
+    first_alignment = first_cm = first_diag = None  # ultimate fallback: no tier ever anchors
     for tier in canonical_cm_tiers:
-        path = _resolve_canonical_for_tier(header, tier)
+        path = _resolve_canonical_for_tier(header, seq, tier)
         if path is None:
             logger.info(f"{header}: skipping a canonical CM tier -- no CM for this amino acid there")
             continue
@@ -770,18 +870,43 @@ def select_cm_and_align(header, seq, canonical_cm_tiers, armless_cm_index):
             logger.info(f"{header}: moving to next canonical CM tier -- alignment failed")
             continue
         diag = classify_arm_loss(header, aln["aligned_seq"], aln["ss_cons"])
-        if canonical_alignment is None:               # keep first usable tier as fallback
-            canonical_alignment, canonical_cm, diagnosis = aln, path, diag
-        if diag["anticodon_stem_index"] is not None:   # clean anchor: stop searching
-            canonical_alignment, canonical_cm, diagnosis = aln, path, diag
+        if first_alignment is None:                    # ultimate fallback if nothing ever anchors
+            first_alignment, first_cm, first_diag = aln, path, diag
+        idx = diag["anticodon_stem_index"]
+        if idx is None:
+            logger.warning(
+                f"{header}: anticodon did not anchor cleanly against {path}, "
+                f"moving to next canonical CM tier\n"
+                f"  aligned_seq={aln['aligned_seq']}\n"
+                f"  ss_cons={aln['ss_cons']}"
+            )
+            continue
+
+        # clean anchor is necessary but not sufficient: a CM that threads the
+        # anticodon stem short of its full canonical length (ANTICODON_STEM_PAIRS)
+        # may just be a poor fit for this sequence at that stem specifically (see
+        # mt-Cys: TRNAinf-bact.cm threads 3/5, Metazoa_C.cm threads 5/5 for the
+        # identical sequence) -- but a real, correctly-threaded anticodon stem can
+        # also genuinely be shorter than 5bp, so a short count is NOT grounds to
+        # reject a tier outright (that would misfire on real biology). instead:
+        # keep the anchored tier with the fullest thread seen so far, keep
+        # checking remaining tiers only while short of the canonical count, and
+        # stop as soon as one reaches it -- never disqualifying an anchor, only
+        # preferring a fuller one when the tiers on offer actually provide one.
+        n_pairs = diag["per_stem_complementarity"][idx]["n_pairs"]
+        if canonical_alignment is None or n_pairs > best_c_pairs:
+            canonical_alignment, canonical_cm, diagnosis, best_c_pairs = aln, path, diag, n_pairs
+        if n_pairs >= ANTICODON_STEM_PAIRS:
             break
         logger.warning(
-            f"{header}: anticodon did not anchor cleanly against {path}, "
-            f"moving to next canonical CM tier\n"
+            f"{header}: anticodon anchored against {path} but its own stem threaded only "
+            f"{n_pairs}/{ANTICODON_STEM_PAIRS} pairs, checking remaining tiers for a fuller thread\n"
             f"  aligned_seq={aln['aligned_seq']}\n"
             f"  ss_cons={aln['ss_cons']}"
         )
 
+    if canonical_alignment is None:
+        canonical_alignment, canonical_cm, diagnosis = first_alignment, first_cm, first_diag
     if canonical_alignment is None:
         return _routing_result(None, None, None)
 
@@ -1012,6 +1137,40 @@ def assign_slots(labels, positions, slots):
             labels[pos] = f"{anchor}{letter}"
 
 
+def _assign_anticodon_loop(labels, seq, c_loop, anticodon):
+    """assign Sprinzl 32-38 anchored on the anticodon's own known position
+    within the loop, not sequential order from the loop's 5' edge. a loop
+    that isn't exactly the canonical 7nt (a stem-edge nucleotide the CM
+    mis-threaded into the loop, or any other irregular split) would otherwise
+    shift the anticodon off 34-35-36 -- the tool's core deliverable -- even
+    though its actual position is already known. among multiple coincidental
+    matches within the loop, picks whichever is closest to the loop's own
+    center, since the true anticodon is always the centered occurrence.
+    fewer than 2 nt on either side of the anticodon leaves those canonical
+    slots (32/33 or 37/38) simply unused, same as assign_slots elsewhere;
+    more than 2 overflows via assign_slots' normal letter-suffix mechanism.
+    falls back to sequential assignment only if the anticodon can't be
+    located in the loop at all (e.g. no anticodon in header)."""
+    ac = (anticodon or "").upper().replace("T", "U")
+    loop_seq = "".join(seq[p] for p in c_loop)
+    matches = [m.start() for m in re.finditer(f"(?={re.escape(ac)})", loop_seq)] if ac else []
+    if not matches:
+        assign_slots(labels, c_loop, [str(i) for i in range(32, 39)])
+        return
+
+    center = (len(loop_seq) - 3) / 2
+    ac_start = min(matches, key=lambda i: abs(i - center))
+    before, ac_positions, after = (
+        c_loop[:ac_start], c_loop[ac_start:ac_start + 3], c_loop[ac_start + 3:])
+
+    before_slots = ([str(i) for i in range(34 - len(before), 34)]
+                     if len(before) <= 2 else ["32", "33"])
+    assign_slots(labels, before, before_slots)
+    for i, pos in enumerate(ac_positions):
+        labels[pos] = str(34 + i)
+    assign_slots(labels, after, ["37", "38"])
+
+
 def sprinzl_map(ss, seq, anticodon, missing_arm=None):
     """assign a Sprinzl label to every nucleotide index; returns {seq_index: label}.
     D-armless tRNAs: replacement loop (all of linker_5) is mapped onto D-arm Sprinzl
@@ -1045,7 +1204,7 @@ def sprinzl_map(ss, seq, anticodon, missing_arm=None):
         ]
         assign_slots(labels, arms["linker_5"], _d_arm_slots)
     assign_slots(labels, arms["c_stem5"],    [str(i) for i in range(27, 32)])
-    assign_slots(labels, arms["c_loop"],     [str(i) for i in range(32, 39)])
+    _assign_anticodon_loop(labels, seq, arms["c_loop"], anticodon)
     assign_slots(labels, arms["c_stem3"],    [str(i) for i in range(39, 44)])
     assign_slots(labels, arms["var_loop"],   ["44", "45", "46", "47", "48"])
     assign_slots(labels, arms["t_stem5"],    [str(i) for i in range(49, 54)])
@@ -1119,7 +1278,7 @@ def process_one_record(args):
     if routing.get("threading_failure_elem"):
         cm_only_ss = final_ss
         final_ss = patch_threading_failure_arm(
-            alignment["aligned_seq"], final_seq, final_ss,
+            header, alignment["aligned_seq"], final_seq, final_ss,
             routing["threading_failure_elem"]
         )
 
@@ -1476,7 +1635,8 @@ def main():
     parser = argparse.ArgumentParser(
         description="assign Sprinzl coordinates to mt-tRNA sequences via structure-based cm selection.")
     parser.add_argument("--fasta", required=True,
-                        help="input FASTA; headers: 'id|aa|anticodon|taxon' or 'anticodon=XXX' tag")
+                        help="input FASTA; headers: 'id|aa|anticodon|taxon', 'anticodon=XXX' tag, "
+                             "or GtRNAdb-style 'tRNA-{AA}-{anticodon}' name (e.g. mt-tRNA-Ala-TGC-1-1)")
     parser.add_argument("--canonical-cm", required=True, nargs="+", metavar="CM_OR_DIR",
                         help="one or more canonical CM sources, tried in order per sequence: "
                              "a path to a single CM (e.g. TRNAinf-bact.cm, applies to every aa), "

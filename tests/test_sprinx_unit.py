@@ -95,6 +95,10 @@ def test_header_field_extraction():
         # field 3 not a 3nt codon -> None, not silently used as anticodon
         ("NC_008640.1:3203-3266|Romanomermis_culicivorax|Ile|GAU", None, "Romanomermis_culicivorax"),
         ("just a plain header", None, None),
+        # GtRNAdb-style 'tRNA-{AA}-{anticodon}' name, no pipes at all
+        ("mt-tRNA-Ala-TGC-1-1", "UGC", "Ala"),
+        ("mt-tRNA-Leu-TAG-2-1", "UAG", "Leu"),
+        ("mt-tRNA-Met-CAT-1-2", "CAU", "Met"),
     ]
     for header, anticodon, aa in cases:
         assert sprinx.header_to_anticodon(header) == anticodon, header
@@ -194,15 +198,20 @@ def test_stem_complementarity_and_anticodon_search():
 # -----------------------------------------------------------------------
 
 def test_sprinzl_map_real_data_invariants():
-    # (sto, tag, anticodon, missing_arm, anticodon_lands_at_34)
+    # (sto, tag, anticodon, missing_arm)
     cases = [
-        ("aln_E_canonical_qutrna.sto",  "Glu|UUC|Homo",  "UUC", None,      True),
-        ("aln_T_canonical_qutrna.sto",  "Thr|UGU|Homo",  "UGU", None,      True),
-        ("aln_L1_canonical_qutrna.sto", "Leu1|UAG|Homo", "UAG", None,      True),
-        ("aln_S1_qutrna.sto",           "Ser1|GCU|Homo", "GCU", "d",       False),  # remapped
-        ("aln_both_armless_mature.sto", "culicivorax",   "GAU", "d_and_t", True),
+        ("aln_E_canonical_qutrna.sto",  "Glu|UUC|Homo",  "UUC", None),
+        ("aln_T_canonical_qutrna.sto",  "Thr|UGU|Homo",  "UGU", None),
+        ("aln_L1_canonical_qutrna.sto", "Leu1|UAG|Homo", "UAG", None),
+        # this Ser1 case has an 8-9nt anticodon loop (a stem-edge nucleotide
+        # the CM mis-threaded into the loop), not the canonical 7nt -- exactly
+        # the case _assign_anticodon_loop exists for: the anticodon still
+        # lands at 34-35-36 because it's anchored on the anticodon's own
+        # position, not the loop's 5' edge.
+        ("aln_S1_qutrna.sto",           "Ser1|GCU|Homo", "GCU", "d"),
+        ("aln_both_armless_mature.sto", "culicivorax",   "GAU", "d_and_t"),
     ]
-    for sto, tag, anticodon, missing_arm, at_34 in cases:
+    for sto, tag, anticodon, missing_arm in cases:
         seqs, ss_cons = load_sto(sto)
         name = next(k for k in seqs if tag in k)
         seq, ss = sprinx.finalize_structure({"aligned_seq": seqs[name], "ss_cons": ss_cons})
@@ -210,14 +219,30 @@ def test_sprinzl_map_real_data_invariants():
         assert sprinzl[0] == "1", tag
         assert [i for i in range(len(seq)) if i not in sprinzl] == [], f"{tag}: unlabeled"
         assert _monotonic(sprinzl), f"{tag}: non-monotonic"
-        if at_34:
-            got = "".join(seq[i] for i in sorted(sprinzl) if sprinzl[i] in ("34", "35", "36"))
-            assert got == anticodon, f"{tag}: anticodon at 34-36 was {got!r}"
+        got = "".join(seq[i] for i in sorted(sprinzl) if sprinzl[i] in ("34", "35", "36"))
+        assert got == anticodon, f"{tag}: anticodon at 34-36 was {got!r}"
         if missing_arm == "d":
             # option A (Ozerova et al. 2024): the D-armless replacement loop maps
             # onto Sprinzl 8-26 by structural analogy, even with no D-stem pairs.
             labeled = {int(re.match(r"\d+", v).group()) for v in sprinzl.values()}
             assert any(10 <= p <= 25 for p in labeled), f"{tag}: no D-arm labels"
+
+
+def test_assign_anticodon_loop_anchors_on_anticodon_not_loop_edge():
+    """direct unit coverage for _assign_anticodon_loop: a loop longer than the
+    canonical 7nt (extra nt on the 5' side, the loop-mis-threading pattern
+    seen in the Ser1 fixture above) must still centre 34-35-36 on the real
+    anticodon, with overflow letter-suffixed onto 33/38 rather than shifting
+    the anticodon's own labels."""
+    seq = "AAUUGCAUUAA"   # 11nt: 4 before the anticodon, GCA, 4 after
+    c_loop = list(range(len(seq)))
+    labels = {}
+    sprinx._assign_anticodon_loop(labels, seq, c_loop, "GCA")
+    assert labels[4] == "34" and labels[5] == "35" and labels[6] == "36"
+    assert labels[0] == "32" and labels[1] == "33"
+    assert labels[2] == "33A" and labels[3] == "33B"   # overflow before the anchor
+    assert labels[7] == "37" and labels[8] == "38"
+    assert labels[9] == "38A" and labels[10] == "38B"  # overflow after
 
 
 # -----------------------------------------------------------------------
@@ -355,19 +380,33 @@ class TestArmSpanAndPatch:
             fs, _ = sprinx.finalize_structure({"aligned_seq": a, "ss_cons": tss})
             assert not sprinx.arm_is_threading_failure(a, fs, te), name
 
-    def test_patch_recovers_pairs_balanced_and_aborts_on_overlap(self):
+    def test_patch_recovers_pairs_balanced(self):
         seqs, _, elems = self._val()
         val_seq = load_fa("canonical.fa")[next(k for k in load_fa("canonical.fa") if "Val|UAC|Homo" in k)]
         aln = self._synthetic_val_aln(seqs, elems)
-        patched = sprinx.patch_threading_failure_arm(aln, val_seq, self.CANONICAL_SS, elems[-1])
+        patched = sprinx.patch_threading_failure_arm("probe", aln, val_seq, self.CANONICAL_SS, elems[-1])
         assert patched.count("(") > self.CANONICAL_SS.count("(")
         assert patched.count("(") == patched.count(")")
-        # blocking the arm_ss opens with existing ')' must abort the patch intact.
+
+    def test_patch_overrides_a_weak_pre_existing_pair_inside_its_own_span(self):
+        """a real case (mt-Cys under TRNAinf-bact.cm): cmalign's own consensus can
+        leave a single weak pair inside a span already flagged as a threading
+        failure (below MIN_STEM_PAIRS but still non-'.'). that pair must not
+        block the patch meant to replace it -- the patch overrides it instead
+        of aborting, since the whole point of patching is that structure
+        inside this span is untrustworthy."""
+        seqs, _, elems = self._val()
+        val_seq = load_fa("canonical.fa")[next(k for k in load_fa("canonical.fa") if "Val|UAC|Homo" in k)]
+        aln = self._synthetic_val_aln(seqs, elems)
+        # a single bp at the exact position the eventual fold also uses (46-57):
+        # directionally consistent with the fold, same as the real Cys case.
         ss_list = list(self.CANONICAL_SS)
-        for i in (46, 47, 48):
-            ss_list[i] = ")"
-        original = "".join(ss_list)
-        assert sprinx.patch_threading_failure_arm(aln, val_seq, original, elems[-1]) == original
+        ss_list[46], ss_list[57] = "(", ")"
+        conflicting = "".join(ss_list)
+        patched = sprinx.patch_threading_failure_arm("probe", aln, val_seq, conflicting, elems[-1])
+        assert patched != conflicting
+        assert patched.count("(") == patched.count(")")
+        assert patched.count("(") > conflicting.count("(")
 
 
 # -----------------------------------------------------------------------
@@ -389,7 +428,11 @@ def test_aa_field_to_cm_code():
     keys = {("A", "t"), ("V", "d"), ("L1", "t"), ("L2", "d"),
             ("S1", "t"), ("S2", "d"), ("M", "t"), ("T", "t")}
     expected = {"Ala": "A", "Val": "V", "Leu1": "L1", "Leu2": "L2", "Ser1": "S1",
-                "Ser2": "S2", "Met": "M", "Xyz": None, "Met3": None}
+                "Ser2": "S2", "Met": "M", "Xyz": None, "Met3": None,
+                # bare aa with no isoacceptor digit (GtRNAdb style): returned
+                # as-is when it digit-matches 2+ index entries, for the caller
+                # to disambiguate by anticodon instead of failing here.
+                "Leu": "L", "Ser": "S"}
     for aa, code in expected.items():
         assert sprinx.aa_field_to_cm_code(aa, keys) == code, aa
 

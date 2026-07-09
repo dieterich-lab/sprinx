@@ -78,6 +78,21 @@ written with `_CMonly` inserted before the extension (e.g. `cloverleaves.svg` ->
 pre-patch, CM-only structure -- so the patch's effect is visible side by side
 rather than assumed.
 
+### Converting to QuTRNA2's format
+
+```bash
+python convert_output_to_qutrna2-seq_to_sprinzl.py sprinzl_mapping.tsv
+# -> sprinzl_mapping.seq_to_sprinzl.tsv
+```
+
+Converts sprinx's own output TSV into QuTRNA2's `seq_to_sprinzl.tsv` format: one row
+per (Sprinzl label, tRNA id), giving that tRNA's 1-indexed sequence position for the
+label, or `-` if the label doesn't occur in that particular sequence. The label set is
+the union of every distinct `sprinzl_position` seen across the whole input (sprinx
+assigns labels per-sequence -- armless replacement loops, RNAfold-patch overflow,
+insertion codes -- so there's no fixed master list to start from), sorted in Sprinzl
+order. `id` is the FASTA header (the input's `seq_id` column), unchanged.
+
 ## Requirements
 
 - Python 3, with `pandas`, `RNA` (ViennaRNA), `forgi`, `biopython`, `loguru`,
@@ -139,15 +154,23 @@ python sprinx.py --fasta data/canonical.fa \
 ```
 
 Headers must be pipe-delimited as `id|aa|anticodon|taxon` (e.g.
-`seq1|Leu1|UAA|Mus_musculus`), or carry an `anticodon=XXX` tag anywhere in the string.
-The anticodon field drives CM selection and arm-loss anchoring. The aa field only
-picks which armless CM family to search, it isn't load-bearing for anything structural.
+`seq1|Leu1|UAA|Mus_musculus`), carry an `anticodon=XXX` tag anywhere in the string, or
+follow the GtRNAdb naming convention `tRNA-{AA}-{anticodon}` anywhere in the header
+(e.g. `mt-tRNA-Ala-TGC-1-1`). The anticodon field drives CM selection and arm-loss
+anchoring. The aa field only picks which armless (or per-AA canonical) CM family to
+search, it isn't load-bearing for anything structural -- GtRNAdb names never carry an
+isoacceptor digit (Leu/Ser cover two anticodons each with the same bare aa name), so a
+bare aa code that matches more than one CM is disambiguated by aligning to each
+candidate and keeping whichever anchors the anticodon, the same approach already used
+for filename-suffixed isoacceptor CMs (Leu1/Leu2, Ser1/Ser2).
 
 ## Layout
 
 ```
 sprinx.py                   CLI, alignment, arm-loss classification, Sprinzl
                              assignment, plotting, all in one file
+convert_output_to_qutrna2-seq_to_sprinzl.py
+                             converts sprinx's output TSV to QuTRNA2's seq_to_sprinzl.tsv format
 conftest.py                  pytest setup, loads .env / SPRINX_* vars for integration tests
 env.example                  template for .env
 data/                        example FASTA, canonical CM, armless CM library
