@@ -150,9 +150,29 @@ def test_patch_overrides_weak_pre_existing_pair_real_data():
     assert patched != final_ss
     assert patched.count("(") > final_ss.count("(")
     assert patched.count("(") == patched.count(")")
-    sprinzl = sprinx.sprinzl_map(patched, final_seq, sprinx.header_to_anticodon(header), diag["missing_arm"])
-    unlabeled = [i for i in range(len(final_seq)) if i not in sprinzl]
-    assert unlabeled == []
+
+
+@need_bact
+def test_d_arm_patch_widens_to_recover_full_stem():
+    """mt-Cys's D-arm, once confirmed a threading failure, must fold over the
+    widened inter-stem domain (see _widen_arm_span) rather than elem['span']
+    alone -- the narrow span recovers only 3bp, leaving the AD-linker 'UU'
+    unpaired despite being complementary to the DC-linker's 'AA'; the wider
+    fold recovers the full 5bp stem, so the AD-linker ends up empty."""
+    header = "mt-tRNA-Cys-GCA-1-1"
+    seq = "GATAATGTTCAGTGGTCTGAAATTGAATTTGCAAAATTTGATATATGAGTTCAATTCTCATCATTATCT"
+    routing = sprinx.select_cm_and_align(header, seq, BACT_CM, {})
+    assert routing["threading_failure_elem"] is not None
+    aln = routing["final_alignment"]
+    final_seq, final_ss = sprinx.finalize_structure(aln)
+    patched = sprinx.patch_threading_failure_arm(
+        header, aln["aligned_seq"], final_seq, final_ss, routing["threading_failure_elem"])
+    topo = sprinx.parse_topology(patched)
+    arms = sprinx.locate_anticodon_stem(topo, patched, final_seq, "GCA",
+                                         routing["diagnosis"]["missing_arm"])
+    assert arms["linker_5"] == []
+    sprinzl = sprinx.sprinzl_map(patched, final_seq, "GCA", routing["diagnosis"]["missing_arm"])
+    assert [i for i in range(len(final_seq)) if i not in sprinzl] == []
 
 
 @need_cmalign

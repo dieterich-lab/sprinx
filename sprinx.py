@@ -512,6 +512,25 @@ def get_stem_loop_elements(ss):
     return [g for g in _forgi_stem_groups(ss) if g["loop_cols"]]
 
 
+def _widen_arm_span(ss_cons, elements, idx):
+    """widen elem['span'] from the CM's own column boundary out to the full
+    gap between neighboring stems (or the acceptor). a threading failure can
+    leave real arm sequence in columns the CM called flanking linker instead
+    of its own; folding only elem['span'] then misses base pairs that belong
+    to the same stem (pombe mt-Cys's D-arm recovers 3bp folded narrow, 5bp folded
+    wide -- the extra 2bp were sitting in the linker). only ever call this
+    on an ALREADY-confirmed threading failure (see select_cm_and_align) --
+    using it for detection itself lets real armless sequences fold a
+    spurious hairpin out of unrelated linker sequence."""
+    groups = _forgi_stem_groups(ss_cons)
+    acceptor = next(g for g in groups if not g["loop_cols"])
+    start = (elements[idx - 1]["stem3_cols"][-1] + 1 if idx > 0
+             else max(acceptor["stem5_cols"]) + 1)
+    end = (elements[idx + 1]["stem5_cols"][0] if idx + 1 < len(elements)
+           else min(acceptor["stem3_cols"]))
+    return start, end
+
+
 def find_anticodon_stem_index(aligned_seq, stem_loop_elements, anticodon):
     """search for anticodon within each stem-loop's hairpin-loop columns only.
     both '-' and '.' must be stripped from loop sequences together; filtering
@@ -924,19 +943,25 @@ def select_cm_and_align(header, seq, canonical_cm_tiers, armless_cm_index):
     # D-arm via no-shift (offset==0) doesn't have that problem and gets the
     # same cross-check as T-arm.
     if missing_arm in ("t", "d"):
+        elem = idx = elements = None
         if missing_arm == "d" and diagnosis["register_offset"] != 0:
-            elem = None  # register-shift D-arm: trusted directly, no cross-check
+            pass  # register-shift D-arm: trusted directly, no cross-check
         else:
             elements = get_stem_loop_elements(canonical_alignment["ss_cons"])
             if missing_arm == "t":
-                elem = elements[-1] if elements else None
+                idx = len(elements) - 1 if elements else None
             else:
-                d_idx = diagnosis["anticodon_stem_index"] - 1
-                elem = elements[d_idx] if 0 <= d_idx < len(elements) else None
+                idx = diagnosis["anticodon_stem_index"] - 1
+                idx = idx if 0 <= idx < len(elements) else None
+            elem = elements[idx] if idx is not None else None
 
+        # detection stays on elem's own narrow span; only the confirmed
+        # patch's fold gets widened (see _widen_arm_span).
         if elem and arm_span_has_enough_sequence(canonical_alignment["aligned_seq"], elem):
             final_seq, _ = finalize_structure(canonical_alignment)
             if arm_is_threading_failure(canonical_alignment["aligned_seq"], final_seq, elem):
+                widened = _widen_arm_span(canonical_alignment["ss_cons"], elements, idx)
+                wide_elem = dict(elem, span=widened)
                 logger.info(
                     f"{header}: CM diagnosed {missing_arm}-arm missing against {canonical_cm} "
                     f"({diagnosis['call']}) but the span folds as a real hairpin "
@@ -945,7 +970,7 @@ def select_cm_and_align(header, seq, canonical_cm_tiers, armless_cm_index):
                     f"  ss_cons={canonical_alignment['ss_cons']}"
                 )
                 return _routing_result(canonical_alignment, canonical_cm, diagnosis,
-                                        threading_failure_elem=elem)
+                                        threading_failure_elem=wide_elem)
 
     # genuine arm loss: reroute
     logger.info(f"{header}: {missing_arm}-arm missing against {canonical_cm} "
