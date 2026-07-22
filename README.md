@@ -72,11 +72,13 @@ Useful for sanity-checking a run, not part of the actual output.
 Requires an R2DT Singularity image (`--r2dt-image`, default `lib/r2dt` next to
 `sprinx.py`) and `singularity`/`apptainer` on `PATH`.
 
-For any sequence RNAfold-patched a CM threading failure, a second file is also
-written with `_CMonly` inserted before the extension (e.g. `cloverleaves.svg` ->
-`cloverleaves_CMonly.svg`), containing just those sequences rendered with their
-pre-patch, CM-only structure -- so the patch's effect is visible side by side
-rather than assumed.
+For any sequence RNAfold-patched a CM threading failure, two extra files are also
+written, containing just those sequences:
+- `_CMonly` (e.g. `cloverleaves.svg` -> `cloverleaves_CMonly.svg`): the pre-patch,
+  CM-only structure, so the patch's effect is visible side by side rather than assumed.
+- `_RNAfoldOnly`: the same sequence folded naively as a whole with RNAfold alone, no
+  CM at all -- shows why the hybrid approach exists, since full-sequence MFE misses
+  the tertiary contacts and modified bases a real mt-tRNA structure depends on.
 
 ### Converting to QuTRNA2's format
 

@@ -122,6 +122,24 @@ def test_val_threading_failure_real_alignment(val_real_alignment):
     assert patched.count("(") == patched.count(")") and len(patched) == len(final_seq)
 
 
+@need_cmalign
+@need_armless
+def test_process_one_record_populates_rnafold_only_ss_for_patched_sequences():
+    """every RNAfold-patched record must also carry a naive whole-sequence
+    MFE fold (rnafold_only_ss, for the --plot _RNAfoldOnly comparison) --
+    distinct from cm_only_ss (the pre-patch CM structure) and never used for
+    the actual patch itself, only for visual comparison."""
+    seqs = _load_bundle_fa("canonical.fa")
+    val_key = next(k for k in seqs if "Val|UAC|Homo" in k)
+    armless = sprinx.index_armless_cms(ARMLESS_CM_DIR)
+    result = sprinx.process_one_record((val_key, seqs[val_key], CANONICAL_CM, armless, False))
+    assert result["cm_only_ss"] is not None
+    assert result["rnafold_only_ss"] is not None
+    assert result["rnafold_only_ss"] != result["cm_only_ss"]
+    assert len(result["rnafold_only_ss"]) == len(result["seq"])
+    assert result["rnafold_only_ss"].count("(") == result["rnafold_only_ss"].count(")")
+
+
 need_bact = pytest.mark.skipif(
     not (CMALIGN_OK and os.path.exists(BACT_CM)), reason="requires: cmalign, TRNAinf-bact.cm")
 

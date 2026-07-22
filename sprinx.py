@@ -1364,9 +1364,13 @@ def process_one_record(args):
         return {"header": header, "rows": [], "summary": "CMALIGN_FAILED"}
 
     final_seq, final_ss = finalize_structure(alignment)
-    cm_only_ss = None
+    cm_only_ss = rnafold_only_ss = None
     if routing.get("threading_failure_elem"):
         cm_only_ss = final_ss
+        # naive whole-sequence MFE fold, for comparison only -- never used for
+        # the actual patch (see module docstring: unreliable at full mt-tRNA
+        # length, tertiary contacts and modified bases aren't 2D-foldable).
+        rnafold_only_ss, _ = RNA.fold_compound(final_seq).mfe()
         final_ss = patch_threading_failure_arm(
             header, alignment["aligned_seq"], final_seq, final_ss,
             routing["threading_failure_elem"]
@@ -1426,7 +1430,7 @@ def process_one_record(args):
     logger.info(f"{header}: {summary}  [{diagnosis.get('call')}]")
     return {"header": header, "rows": rows, "summary": summary,
             "seq": final_seq, "ss": final_ss, "sprinzl": sprinzl,
-            "cm_only_ss": cm_only_ss}
+            "cm_only_ss": cm_only_ss, "rnafold_only_ss": rnafold_only_ss}
 
 
 # --- plotting (optional, --plot) ---
@@ -1501,6 +1505,13 @@ def _cm_only_plot_path(path):
     comparison plot alongside the regular one."""
     root, ext = os.path.splitext(path)
     return f"{root}_CMonly{ext}"
+
+
+def _rnafold_only_plot_path(path):
+    """cloverleaves.svg -> cloverleaves_RNAfoldOnly.svg, for the naive
+    whole-sequence-MFE comparison plot alongside the regular one."""
+    root, ext = os.path.splitext(path)
+    return f"{root}_RNAfoldOnly{ext}"
 
 
 SVG_NS = "http://www.w3.org/2000/svg"
@@ -1814,6 +1825,15 @@ def main():
             cm_only_path = _cm_only_plot_path(args.plot)
             make_plot(cm_only_results, cm_only_path, r2dt_image=args.r2dt_image, ncols=args.ncols)
             logger.info(f"plot (CM-only, pre-RNAfold-patch): {cm_only_path}")
+
+        # same sequences, but folded naively as a whole with RNAfold alone (no
+        # CM at all) -- shows why the hybrid exists: full-sequence MFE misses
+        # tertiary contacts and modified bases a real mt-tRNA structure needs.
+        rnafold_only_results = [{**r, "ss": r["rnafold_only_ss"]} for r in results if r.get("rnafold_only_ss")]
+        if rnafold_only_results:
+            rnafold_only_path = _rnafold_only_plot_path(args.plot)
+            make_plot(rnafold_only_results, rnafold_only_path, r2dt_image=args.r2dt_image, ncols=args.ncols)
+            logger.info(f"plot (RNAfold-only, whole-sequence naive fold): {rnafold_only_path}")
 
 
 if __name__ == "__main__":
