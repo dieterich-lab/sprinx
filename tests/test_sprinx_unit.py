@@ -1,5 +1,5 @@
 """
-test_sprinx_unit.py -- unit tests for sprinx.py.
+test_sprinx_unit.py: unit tests for sprinx.label.
 
 no subprocess calls; infernal not required. pre-computed cmalign Stockholm
 alignments are in test_data_bundle.txt (==> name <== markers, produced with
@@ -13,13 +13,11 @@ rather than parametrizing, to keep the run count small.
 """
 import os
 import re
-import sys
 
 import pytest
 import RNA
 
-sys.path.insert(0, os.path.dirname(__file__))
-import sprinx
+from sprinx import label as sprinx
 
 BUNDLE_PATH = os.path.join(os.path.dirname(__file__), "test_data_bundle.txt")
 
@@ -51,7 +49,7 @@ def load_fa(name):
 def _key(lbl):
     """sort key ordering '23' < '23A' < '23B' < '24', and placing variable-arm
     'e' labels (class-ii: Leu, Ser) between 45 and 46 in true 5'->3' order:
-    e11-e17 (5' stem), then e1-e5 (loop), then e21-e27 (3' stem) -- the 3'
+    e11-e17 (5' stem), then e1-e5 (loop), then e21-e27 (3' stem); the 3'
     stem is numbered in reverse as written (e27 comes before e21 reading
     5'->3'), so its rank needs negating or e27 would sort after e21."""
     m = re.match(r"e(\d)(\d)?([a-zA-Z]*)$", lbl)
@@ -218,7 +216,7 @@ def test_sprinzl_map_real_data_invariants():
         ("aln_T_canonical_qutrna.sto",  "Thr|UGU|Homo",  "UGU", None),
         ("aln_L1_canonical_qutrna.sto", "Leu1|UAG|Homo", "UAG", None),
         # this Ser1 case has an 8-9nt anticodon loop (a stem-edge nucleotide
-        # the CM mis-threaded into the loop), not the canonical 7nt -- exactly
+        # the CM mis-threaded into the loop), not the canonical 7nt: exactly
         # the case _assign_anticodon_loop exists for: the anticodon still
         # lands at 34-35-36 because it's anchored on the anticodon's own
         # position, not the loop's 5' edge.
@@ -243,14 +241,12 @@ def test_sprinzl_map_real_data_invariants():
 
 
 def test_c_stem3_labels_not_overwritten_by_var_loop():
-    """regression for a real, previously-silent bug: c_close (the boundary
-    var_loop starts from) used stem3_cols[0] -- the INNERMOST c-stem-3
-    column, adjacent to the loop -- instead of stem3_cols[-1], the outermost
-    column where the c-stem actually ends. var_loop's own assign_slots call
-    then overwrote the real c-stem-3 columns' correct labels (40-43) with
-    wrong ones (44-47). monotonicity alone never caught this since both
-    runs are still increasing, just shifted -- this checks against the
-    known-correct values directly."""
+    """the c-stem-3 columns must keep their own labels (40-43), not get
+    overwritten by var_loop's numbering. var_loop's start boundary must be
+    the outermost (last) c-stem-3 column, not the innermost one adjacent to
+    the loop, or its own assign_slots call bleeds into c-stem-3's columns.
+    checked against known-correct values directly, since monotonicity alone
+    can't catch a shifted-but-still-increasing run."""
     seqs, ss_cons = load_sto("aln_E_canonical_qutrna.sto")
     name = next(k for k in seqs if "Glu|UUC|Homo" in k)
     seq, ss = sprinx.finalize_structure({"aligned_seq": seqs[name], "ss_cons": ss_cons})
@@ -262,10 +258,10 @@ def test_c_stem3_labels_not_overwritten_by_var_loop():
 
 def test_variable_arm_stem_gets_e_series_labels():
     """real class-ii case (S. cerevisiae mt-Tyr): a genuine nested variable-
-    arm stem-loop between the c-arm and t-arm must get the Sprinzl e-series
-    (e11-e17 stem/e1-e5 loop/e21-e27 stem, paired e1N<->e2N), not the plain
-    44-48 sequential run -- and every e-labelled base must actually be
-    complementary to its declared pairing partner, not just present."""
+    arm stem-loop between the c-arm and t-arm gets the Sprinzl e-series
+    reserved for it (e11-e17 stem/e1-e5 loop/e21-e27 stem, paired e1N<->e2N),
+    and every e-labelled base is complementary to its declared pairing
+    partner, not just present."""
     seqs, ss_cons = load_sto("aln_canonical36_qutrna_flags.sto")
     name = next(k for k in seqs if "Tyr|GUA|Saccharomyces" in k)
     seq, ss = sprinx.finalize_structure({"aligned_seq": seqs[name], "ss_cons": ss_cons})
@@ -282,10 +278,9 @@ def test_variable_arm_stem_gets_e_series_labels():
 
 def test_assign_anticodon_loop_anchors_on_anticodon_not_loop_edge():
     """direct unit coverage for _assign_anticodon_loop: a loop longer than the
-    canonical 7nt (extra nt on the 5' side, the loop-mis-threading pattern
-    seen in the Ser1 fixture above) must still centre 34-35-36 on the real
-    anticodon, with overflow letter-suffixed onto 33/38 rather than shifting
-    the anticodon's own labels."""
+    canonical 7nt (e.g. extra nt on the 5' side) still centres 34-35-36 on
+    the real anticodon, with the overflow letter-suffixed onto 33/38 and the
+    anticodon's own labels staying fixed."""
     seq = "AAUUGCAUUAA"   # 11nt: 4 before the anticodon, GCA, 4 after
     c_loop = list(range(len(seq)))
     labels = {}
@@ -298,13 +293,11 @@ def test_assign_anticodon_loop_anchors_on_anticodon_not_loop_edge():
 
 
 def test_long_unpaired_variable_region_uses_e_loop_not_48_overflow():
-    """real case (S. pombe mt-Ser1 under TRNAinf-bact.cm): the CM sometimes
-    doesn't thread the variable region as a stem at all -- it comes out as
-    one long unpaired run, so no v_stem is found. that must NOT fall back to
-    stretching 44-48 with generic letter overflow (48A, 48B, ...), which was
-    never a real Sprinzl code -- the excess length is itself the signal of a
-    real extended variable region, stem or not, so it gets 44/45, e1-e5
-    (+overflow on e5 past 5nt), 46/47/48, same as the stem-bearing case."""
+    """a variable region long enough to signal a real class-ii extension,
+    even when no stem was threaded there (so no v_stem is found, e.g. when
+    a CM leaves it as one long unpaired run), gets 44/45, e1-e5 (with
+    letter-suffix overflow on e5 past 5nt), 46/47/48: the same e-series
+    layout as the stem-bearing case, keyed only on length."""
     ss = ("(((((((" + "(((CCC)))" + "(((GGG)))" + "." * 11 + "(((AAA)))" + ")))))))")
     seq = ("A" * 7 + "AAA" + "CCC" + "AAA" + "AAA" + "GGG" + "AAA"
            + "U" * 11 + "AAA" + "AAA" + "AAA" + "A" * 7)
@@ -460,17 +453,16 @@ class TestArmSpanAndPatch:
         assert patched.count("(") == patched.count(")")
 
     def test_patch_overrides_a_weak_pre_existing_pair_inside_its_own_span(self):
-        """a real case (mt-Cys under TRNAinf-bact.cm): cmalign's own consensus can
-        leave a single weak pair inside a span already flagged as a threading
-        failure (below MIN_STEM_PAIRS but still non-'.'). that pair must not
-        block the patch meant to replace it -- the patch overrides it instead
-        of aborting, since the whole point of patching is that structure
-        inside this span is untrustworthy."""
+        """a threading-failure span can still carry a single weak pair from
+        cmalign's own consensus (below MIN_STEM_PAIRS but still non-'.').
+        that pair doesn't block the patch meant to replace it; the patch
+        overrides it instead of aborting, since structure inside a confirmed
+        threading-failure span is untrustworthy by definition."""
         seqs, _, elems = self._val()
         val_seq = load_fa("canonical.fa")[next(k for k in load_fa("canonical.fa") if "Val|UAC|Homo" in k)]
         aln = self._synthetic_val_aln(seqs, elems)
-        # a single bp at the exact position the eventual fold also uses (46-57):
-        # directionally consistent with the fold, same as the real Cys case.
+        # a single bp at the exact position the eventual fold also uses (46-57),
+        # directionally consistent with the fold it will be overridden by.
         ss_list = list(self.CANONICAL_SS)
         ss_list[46], ss_list[57] = "(", ")"
         conflicting = "".join(ss_list)

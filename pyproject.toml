@@ -1,3 +1,33 @@
+[project]
+name = "sprinx"
+version = "0.1.0"
+description = "Sprinzl-coordinate annotation for mitochondrial tRNAs"
+requires-python = ">=3.10"
+dependencies = [
+    "pandas",
+    "biopython",
+    "loguru",
+    "scipy",
+    "ViennaRNA",
+    "forgi",
+]
+
+[project.scripts]
+sprinx = "sprinx.cli:main"
+
+[project.optional-dependencies]
+# extra dependency for the standalone scripts/visualize_ss.py; not needed for
+# the core package (see its docstring for why visualization is kept separate).
+viz = ["cairosvg"]
+test = ["pytest"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sprinx"]
+
 [tool.ruff]
 line-length = 88
 
