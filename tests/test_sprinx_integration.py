@@ -118,8 +118,79 @@ def test_val_threading_failure_real_alignment(val_real_alignment):
         val_key, aln["aligned_seq"], aln["ss_cons"])["call"]
     assert sprinx.arm_span_has_enough_sequence(aln["aligned_seq"], t_elem)
     final_seq, final_ss = sprinx.finalize_structure(aln)
-    patched = sprinx.patch_threading_failure_arm(aln["aligned_seq"], final_seq, final_ss, t_elem)
+    patched = sprinx.patch_threading_failure_arm(val_key, aln["aligned_seq"], final_seq, final_ss, t_elem)
     assert patched.count("(") == patched.count(")") and len(patched) == len(final_seq)
+
+
+@need_cmalign
+@need_armless
+def test_process_one_record_populates_rnafold_only_ss_for_patched_sequences():
+    """every RNAfold-patched record must also carry a naive whole-sequence
+    MFE fold (rnafold_only_ss, for the --plot _RNAfoldOnly comparison) --
+    distinct from cm_only_ss (the pre-patch CM structure) and never used for
+    the actual patch itself, only for visual comparison."""
+    seqs = _load_bundle_fa("canonical.fa")
+    val_key = next(k for k in seqs if "Val|UAC|Homo" in k)
+    armless = sprinx.index_armless_cms(ARMLESS_CM_DIR)
+    result = sprinx.process_one_record((val_key, seqs[val_key], CANONICAL_CM, armless, False))
+    assert result["cm_only_ss"] is not None
+    assert result["rnafold_only_ss"] is not None
+    assert result["rnafold_only_ss"] != result["cm_only_ss"]
+    assert len(result["rnafold_only_ss"]) == len(result["seq"])
+    assert result["rnafold_only_ss"].count("(") == result["rnafold_only_ss"].count(")")
+
+
+need_bact = pytest.mark.skipif(
+    not (CMALIGN_OK and os.path.exists(BACT_CM)), reason="requires: cmalign, TRNAinf-bact.cm")
+
+
+@need_bact
+def test_patch_overrides_weak_pre_existing_pair_real_data():
+    """real case that motivated the override-not-abort fix in patch_threading_failure_arm:
+    mt-Cys under TRNAinf-bact.cm threads its D-arm so weakly that only one pair (below
+    MIN_STEM_PAIRS) survives inside the flagged span. RNAfold's own fold of the same span
+    agrees with that pair and extends it to a full 3bp D-stem -- the patch must apply
+    (not abort on the pre-existing single pair), and the resulting structure must leave
+    zero positions unlabeled."""
+    header = "mt-tRNA-Cys-GCA-1-1"
+    seq = "GATAATGTTCAGTGGTCTGAAATTGAATTTGCAAAATTTGATATATGAGTTCAATTCTCATCATTATCT"
+    aln = sprinx.cmalign_one(header, seq, BACT_CM)
+    assert aln is not None
+    diag = sprinx.classify_arm_loss(header, aln["aligned_seq"], aln["ss_cons"])
+    assert diag["missing_arm"] == "d"
+    elements = sprinx.get_stem_loop_elements(aln["ss_cons"])
+    d_elem = elements[diag["anticodon_stem_index"] - 1]
+    assert sprinx.arm_is_threading_failure(aln["aligned_seq"],
+                                            sprinx.finalize_structure(aln)[0], d_elem)
+    final_seq, final_ss = sprinx.finalize_structure(aln)
+    assert final_ss.count("(") >= 1   # cmalign's own weak pair survives pre-patch
+    patched = sprinx.patch_threading_failure_arm(header, aln["aligned_seq"], final_seq, final_ss, d_elem)
+    assert patched != final_ss
+    assert patched.count("(") > final_ss.count("(")
+    assert patched.count("(") == patched.count(")")
+
+
+@need_bact
+def test_d_arm_patch_widens_to_recover_full_stem():
+    """mt-Cys's D-arm, once confirmed a threading failure, must fold over the
+    widened inter-stem domain (see _widen_arm_span) rather than elem['span']
+    alone -- the narrow span recovers only 3bp, leaving the AD-linker 'UU'
+    unpaired despite being complementary to the DC-linker's 'AA'; the wider
+    fold recovers the full 5bp stem, so the AD-linker ends up empty."""
+    header = "mt-tRNA-Cys-GCA-1-1"
+    seq = "GATAATGTTCAGTGGTCTGAAATTGAATTTGCAAAATTTGATATATGAGTTCAATTCTCATCATTATCT"
+    routing = sprinx.select_cm_and_align(header, seq, BACT_CM, {})
+    assert routing["threading_failure_elem"] is not None
+    aln = routing["final_alignment"]
+    final_seq, final_ss = sprinx.finalize_structure(aln)
+    patched = sprinx.patch_threading_failure_arm(
+        header, aln["aligned_seq"], final_seq, final_ss, routing["threading_failure_elem"])
+    topo = sprinx.parse_topology(patched)
+    arms = sprinx.locate_anticodon_stem(topo, patched, final_seq, "GCA",
+                                         routing["diagnosis"]["missing_arm"])
+    assert arms["linker_5"] == []
+    sprinzl = sprinx.sprinzl_map(patched, final_seq, "GCA", routing["diagnosis"]["missing_arm"])
+    assert [i for i in range(len(final_seq)) if i not in sprinzl] == []
 
 
 @need_cmalign
@@ -136,7 +207,7 @@ def test_select_cm_and_align_routing_and_no_unlabeled():
         final_seq, final_ss = sprinx.finalize_structure(aln)
         if routing.get("threading_failure_elem"):
             final_ss = sprinx.patch_threading_failure_arm(
-                aln["aligned_seq"], final_seq, final_ss, routing["threading_failure_elem"])
+                header, aln["aligned_seq"], final_seq, final_ss, routing["threading_failure_elem"])
         diag = routing["diagnosis"] or {}
         sprinzl = sprinx.sprinzl_map(final_ss, final_seq,
                                      sprinx.header_to_anticodon(header), diag.get("missing_arm"))
@@ -186,6 +257,48 @@ need_tiered = pytest.mark.skipif(
     reason="requires: cmalign, Metazoa_Y.cm, TRNAinf-bact.cm")
 
 
+need_bact_and_metazoa_c = pytest.mark.skipif(
+    not (CMALIGN_OK and os.path.exists(BACT_CM)
+         and os.path.exists(os.path.join(DATA_DIR, "full_tRNAs_mitofinder_tRNAScanSE", "Metazoa_C.cm"))),
+    reason="requires: cmalign, TRNAinf-bact.cm, Metazoa_C.cm")
+
+
+@need_bact_and_metazoa_c
+def test_tier_prefers_fuller_anticodon_stem_thread_over_first_anchor():
+    """real case that motivated preferring a fuller anticodon-stem thread across
+    tiers instead of stopping at the first clean anchor: mt-Cys anchors cleanly
+    against TRNAinf-bact.cm, but that CM only threads 3 of the anticodon stem's
+    5 canonical pairs -- Metazoa_C.cm threads all 5 for the identical sequence.
+    a short thread must not disqualify the first tier outright (a real
+    anticodon stem can genuinely be shorter than 5bp), but a later tier that
+    reaches the full canonical count must still win, since the end-to-end
+    consequence of accepting the short thread is a shifted anticodon
+    (verified via the no-unlabeled / anticodon-at-34-36 invariant)."""
+    tier_dir = os.path.join(DATA_DIR, "full_tRNAs_mitofinder_tRNAScanSE")
+    header = "mt-tRNA-Cys-GCA-1-1"
+    seq = "GAUAAUGUUCAGUGGUCUGAAAUUGAAUUUGCAAAAUUUGAUAUAUGAGUUCAAUUCUCAUCAUUAUCU"
+
+    bact_only = sprinx.select_cm_and_align(header, seq, BACT_CM, {})
+    idx = bact_only["diagnosis"]["anticodon_stem_index"]
+    assert idx is not None
+    assert bact_only["diagnosis"]["per_stem_complementarity"][idx]["n_pairs"] < sprinx.ANTICODON_STEM_PAIRS
+
+    routing = sprinx.select_cm_and_align(header, seq, [BACT_CM, sprinx.index_canonical_cms(tier_dir)], {})
+    assert os.path.basename(routing["cm_used"]) == "Metazoa_C.cm"
+    idx2 = routing["diagnosis"]["anticodon_stem_index"]
+    assert routing["diagnosis"]["per_stem_complementarity"][idx2]["n_pairs"] == sprinx.ANTICODON_STEM_PAIRS
+
+    aln = routing["final_alignment"]
+    final_seq, final_ss = sprinx.finalize_structure(aln)
+    if routing.get("threading_failure_elem"):
+        final_ss = sprinx.patch_threading_failure_arm(
+            header, aln["aligned_seq"], final_seq, final_ss, routing["threading_failure_elem"])
+    sprinzl = sprinx.sprinzl_map(final_ss, final_seq, "GCA", routing["diagnosis"].get("missing_arm"))
+    got = "".join(final_seq[i] for i in sorted(sprinzl) if sprinzl[i] in ("34", "35", "36"))
+    assert got == "GCA"
+    assert [i for i in range(len(final_seq)) if i not in sprinzl] == []
+
+
 @need_tiered
 def test_tiered_canonical_falls_back_to_bacterial():
     """S. cerevisiae mt-Tyr has a long variable loop Metazoa_Y.cm can't model
@@ -222,10 +335,42 @@ def test_all_armless_fixtures_rerouted_under_bacterial_cm():
 
 def test_resolve_canonical_for_tier():
     # a plain path applies to every aa; a dict resolves by aa or returns None.
-    assert sprinx._resolve_canonical_for_tier("any|header|x|y", "/p.cm") == "/p.cm"
+    assert sprinx._resolve_canonical_for_tier("any|header|x|y", "ACGU", "/p.cm") == "/p.cm"
     tier = {"A": "/models/Ala.cm", "V": "/models/Val.cm"}
-    assert sprinx._resolve_canonical_for_tier("id|Ala|UGC|taxon", tier) == "/models/Ala.cm"
-    assert sprinx._resolve_canonical_for_tier("id|Trp|UCA|taxon", tier) is None
+    assert sprinx._resolve_canonical_for_tier("id|Ala|UGC|taxon", "ACGU", tier) == "/models/Ala.cm"
+    assert sprinx._resolve_canonical_for_tier("id|Trp|UCA|taxon", "ACGU", tier) is None
+
+
+@need_cmalign
+def test_resolve_canonical_for_tier_disambiguates_bare_isoacceptor_by_anticodon():
+    """a GtRNAdb-style header never carries an isoacceptor digit (bare 'Leu'
+    covers both anticodons), so a per-AA tier with separate L1/L2 CMs has to
+    resolve a bare aa code some way other than a direct dict lookup. real
+    Metazoa_L1.cm/L2.cm both structurally anchor either real Leu anticodon
+    equally well (the filename split isn't a biological distinction the
+    anchor check can see -- consistent with the module's own principle that
+    isoacceptor filenames are arbitrary, never load-bearing), so this can't
+    assert which specific file comes back. what's load-bearing: resolution
+    never fails silently (a bare code always returns *some* real candidate,
+    not None) and is deterministic (same header+seq -> same CM every call,
+    since a flaky pick would make Sprinzl output non-reproducible)."""
+    tier_dir = os.path.join(DATA_DIR, "full_tRNAs_mitofinder_tRNAScanSE")
+    tier = sprinx.index_canonical_cms(tier_dir)
+    assert {"L1", "L2"} <= set(tier)
+
+    seqs = _load_bundle_fa("canonical.fa")
+    leu1 = next(k for k in seqs if "Leu1|UAG|Homo" in k)
+    leu2 = next(k for k in seqs if "Leu2|UAA|Homo" in k)
+
+    # simulate a GtRNAdb-style header: bare 'Leu' aa field, no isoacceptor digit.
+    header1 = f"mt-tRNA-Leu-{sprinx.header_to_anticodon(leu1)}-1-1"
+    header2 = f"mt-tRNA-Leu-{sprinx.header_to_anticodon(leu2)}-2-1"
+
+    for header, seq in [(header1, seqs[leu1]), (header2, seqs[leu2])]:
+        paths = {sprinx._resolve_canonical_for_tier(header, seq, tier) for _ in range(3)}
+        assert len(paths) == 1, f"{header}: non-deterministic pick {paths}"
+        path = paths.pop()
+        assert path in tier.values()
 
 
 if __name__ == "__main__":
