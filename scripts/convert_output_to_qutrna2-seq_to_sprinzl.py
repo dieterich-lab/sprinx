@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-convert_output_to_qutrna2-seq_to_sprinzl.py -- convert sprinx.py's sprinzl_mapping.tsv
+convert_output_to_qutrna2-seq_to_sprinzl.py: convert sprinx's sprinzl_mapping.tsv
 into QuTRNA2's seq_to_sprinzl.tsv format: one row per (Sprinzl label, tRNA id), giving
 that tRNA's 1-indexed sequence position for the label, or '-' if the label doesn't
 occur in that particular tRNA.
 
 the reference label set is the union of every distinct sprinzl_position seen across
-the whole input, in Sprinzl order -- sprinx.py assigns labels per-sequence (armless
+the whole input, in Sprinzl order, since sprinx assigns labels per-sequence (armless
 replacement loops, RNAfold-patch overflow, insertion codes), so no fixed master list
 exists ahead of time; it has to be built from whatever the input actually contains.
 
@@ -23,12 +23,12 @@ from collections import defaultdict
 def _label_sort_key(label):
     """sort key placing every label in true 5'->3' Sprinzl order.
     plain numeric labels (with optional letter-suffix overflow, e.g. '60A')
-    sort by (number, suffix length, suffix) -- suffix length before suffix
+    sort by (number, suffix length, suffix): suffix length before suffix
     itself so a single-letter overflow (Z) sorts before the two-letter
     overflow that follows it (AA), which plain string comparison gets wrong.
     variable-arm 'e' labels (class-ii: Leu, Ser) sit strictly between 45 and
-    46: e11-e17 (5' stem) first, then e1-e5 (loop), then e21-e27 (3' stem)
-    -- but the 3' stem is numbered in REVERSE as you read it 5'->3' (e27
+    46: e11-e17 (5' stem) first, then e1-e5 (loop), then e21-e27 (3' stem),
+    but the 3' stem is numbered in REVERSE as you read it 5'->3' (e27
     comes before e21), so its sort order needs the digit negated or e27
     would wrongly sort after e21."""
     m = re.match(r"e(\d)(\d)?([A-Za-z]*)$", label)
@@ -54,12 +54,12 @@ def convert(in_path, out_path):
     with open(in_path, newline="") as f:
         for row in csv.DictReader(f, delimiter="\t"):
             label = row["sprinzl_position"].strip()
-            if not label:            # unlabeled position (see sprinx.py's own
+            if not label:            # unlabeled position (see sprinx's own
                 continue              # unlabeled-position warning); nothing to map
             seq_id = row["seq_id"]
             if seq_id not in by_id:
                 order.append(seq_id)
-            # qutrna2 convention: 17A/20A/20B, not 17a/20a/20b -- but variable-arm
+            # qutrna2 convention: 17A/20A/20B, not 17a/20a/20b; variable-arm
             # 'e' labels (e11, e21, ...) keep their lowercase 'e', the standard
             # convention for them, untouched by this historical-code uppercasing.
             if not label.startswith(("e", "E")):
@@ -82,7 +82,7 @@ def convert(in_path, out_path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                       formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("sprinzl_tsv", help="sprinx.py output TSV (sprinzl_mapping.tsv)")
+    parser.add_argument("sprinzl_tsv", help="sprinx output TSV (sprinzl_mapping.tsv)")
     parser.add_argument("--out", default=None,
                         help="output path (default: <input>.seq_to_sprinzl.tsv)")
     args = parser.parse_args()

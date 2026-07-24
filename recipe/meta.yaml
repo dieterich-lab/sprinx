@@ -1,0 +1,60 @@
+{% set name = "sprinx" %}
+{% set version = "0.1.0" %}
+
+package:
+  name: "{{ name|lower }}"
+  version: "{{ version }}"
+
+source:
+  path: ..
+
+build:
+  noarch: python
+  number: 0
+  script: "{{ PYTHON }} -m pip install . -vv --no-deps --no-build-isolation"
+  entry_points:
+    - sprinx = sprinx.cli:main
+
+requirements:
+  host:
+    - python >=3.10
+    - pip
+    - hatchling
+  run:
+    - python >=3.10
+    - pandas
+    - biopython
+    - loguru
+    - scipy
+    - viennarna
+    - forgi
+    - infernal >=1.1.4
+
+test:
+  imports:
+    - sprinx
+    - sprinx.label
+    - sprinx.cli
+  commands:
+    - sprinx --help
+    - cmalign -h
+
+about:
+  home: "https://github.com/swstkm/sprinx"
+  summary: "Sprinzl-coordinate annotation for mitochondrial tRNAs"
+  description: |
+    Assigns Sprinzl coordinates to mitochondrial tRNA sequences by aligning
+    each to a tiered set of covariance models, diagnosing genuine arm loss
+    (D-arm, T-arm, doubly-armless) versus a CM threading failure via
+    structural evidence, and rerouting genuinely armless sequences to a
+    matching armless CM. A component of the qutrna2 pipeline, published
+    standalone for transparency and reuse; not a general-purpose tRNA
+    annotator.
+  # TODO: no LICENSE file exists in this repo yet. bioconda-recipes requires
+  # one; add a license and fill this in before any real submission upstream.
+  license: TODO-add-a-license
+  license_file: LICENSE
+
+extra:
+  recipe-maintainers:
+    - swstkm

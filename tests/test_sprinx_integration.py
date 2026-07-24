@@ -1,5 +1,5 @@
 """
-test_sprinx_integration.py -- integration tests requiring cmalign and real CM files.
+test_sprinx_integration.py: integration tests requiring cmalign and real CM files.
 
 these exercise the real single-seq cmalign path, which differs from the multi-seq
 bundle proxy used in test_sprinx_unit.py: single-seq aligned_seq has no '.' chars,
@@ -19,12 +19,10 @@ run:
 import os
 import re
 import shutil
-import sys
 
 import pytest
 
-sys.path.insert(0, os.path.dirname(__file__))
-import sprinx
+from sprinx import label as sprinx
 
 CANONICAL_CM   = os.environ.get("SPRINX_CANONICAL_CM")
 ARMLESS_CM_DIR = os.environ.get("SPRINX_ARMLESS_CM_DIR")
@@ -41,6 +39,7 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 BACT_CM = os.path.join(DATA_DIR, "full_tRNAs_mitofinder_tRNAScanSE", "TRNAinf-bact.cm")
 METAZOA_Y_CM = os.path.join(DATA_DIR, "full_tRNAs_mitofinder_tRNAScanSE", "Metazoa_Y.cm")
 TRUNCATED_CM_DIR = os.path.join(DATA_DIR, "truncated_cm")
+SPOMBE_MT_FA = os.path.join(DATA_DIR, "ref_spombe_mt.no_linker.fasta")
 
 
 def _load_bundle_fa(key):
@@ -81,7 +80,7 @@ CANONICAL_SEQS = {
 @need_cmalign
 def test_cmalign_one_and_finalize_real_path():
     """cmalign_one output must have equal aligned_seq/ss_cons lengths and only
-    uppercase/lowercase/'-' (no '.' -- a multi-seq-only symbol). finalize_structure
+    uppercase/lowercase/'-' (no '.', a multi-seq-only symbol). finalize_structure
     must then return a gap-free, balanced structure whose length matches the RNA."""
     for fa_key, seq_key in CANONICAL_SEQS.items():
         seq = _load_bundle_fa(fa_key)[seq_key]
@@ -125,10 +124,10 @@ def test_val_threading_failure_real_alignment(val_real_alignment):
 @need_cmalign
 @need_armless
 def test_process_one_record_populates_rnafold_only_ss_for_patched_sequences():
-    """every RNAfold-patched record must also carry a naive whole-sequence
-    MFE fold (rnafold_only_ss, for the --plot _RNAfoldOnly comparison) --
-    distinct from cm_only_ss (the pre-patch CM structure) and never used for
-    the actual patch itself, only for visual comparison."""
+    """every RNAfold-patched record also carries a naive whole-sequence MFE
+    fold (rnafold_only_ss, for the visualize_ss.py _RNAfoldOnly comparison
+    plot), distinct from cm_only_ss (the pre-patch CM structure). neither is
+    ever used for the actual patch itself, only for visual comparison."""
     seqs = _load_bundle_fa("canonical.fa")
     val_key = next(k for k in seqs if "Val|UAC|Homo" in k)
     armless = sprinx.index_armless_cms(ARMLESS_CM_DIR)
@@ -146,14 +145,14 @@ need_bact = pytest.mark.skipif(
 
 @need_bact
 def test_patch_overrides_weak_pre_existing_pair_real_data():
-    """real case that motivated the override-not-abort fix in patch_threading_failure_arm:
-    mt-Cys under TRNAinf-bact.cm threads its D-arm so weakly that only one pair (below
-    MIN_STEM_PAIRS) survives inside the flagged span. RNAfold's own fold of the same span
-    agrees with that pair and extends it to a full 3bp D-stem -- the patch must apply
-    (not abort on the pre-existing single pair), and the resulting structure must leave
-    zero positions unlabeled."""
+    """a real threading-failure span (S. pombe mt-Cys's D-arm under
+    TRNAinf-bact.cm, from data/ref_spombe_mt.no_linker.fasta) can thread so
+    weakly that only one pair survives (below MIN_STEM_PAIRS). RNAfold's fold
+    of the same span agrees with that pair and extends it to a full 3bp
+    D-stem: the patch applies over the pre-existing single pair rather than
+    aborting, and the resulting structure leaves zero positions unlabeled."""
     header = "mt-tRNA-Cys-GCA-1-1"
-    seq = "GATAATGTTCAGTGGTCTGAAATTGAATTTGCAAAATTTGATATATGAGTTCAATTCTCATCATTATCT"
+    seq = _load_fasta_file(SPOMBE_MT_FA)[header]
     aln = sprinx.cmalign_one(header, seq, BACT_CM)
     assert aln is not None
     diag = sprinx.classify_arm_loss(header, aln["aligned_seq"], aln["ss_cons"])
@@ -172,13 +171,14 @@ def test_patch_overrides_weak_pre_existing_pair_real_data():
 
 @need_bact
 def test_d_arm_patch_widens_to_recover_full_stem():
-    """mt-Cys's D-arm, once confirmed a threading failure, must fold over the
-    widened inter-stem domain (see _widen_arm_span) rather than elem['span']
-    alone -- the narrow span recovers only 3bp, leaving the AD-linker 'UU'
-    unpaired despite being complementary to the DC-linker's 'AA'; the wider
-    fold recovers the full 5bp stem, so the AD-linker ends up empty."""
+    """S. pombe mt-Cys's D-arm, once
+    confirmed a threading failure, folds over the widened inter-stem domain
+    (see _widen_arm_span) rather than elem['span'] alone: the narrow span
+    recovers only 3bp, leaving the AD-linker 'UU' unpaired despite being
+    complementary to the DC-linker's 'AA'; the wider fold recovers the full
+    5bp stem, so the AD-linker ends up empty."""
     header = "mt-tRNA-Cys-GCA-1-1"
-    seq = "GATAATGTTCAGTGGTCTGAAATTGAATTTGCAAAATTTGATATATGAGTTCAATTCTCATCATTATCT"
+    seq = _load_fasta_file(SPOMBE_MT_FA)[header]
     routing = sprinx.select_cm_and_align(header, seq, BACT_CM, {})
     assert routing["threading_failure_elem"] is not None
     aln = routing["final_alignment"]
@@ -265,18 +265,17 @@ need_bact_and_metazoa_c = pytest.mark.skipif(
 
 @need_bact_and_metazoa_c
 def test_tier_prefers_fuller_anticodon_stem_thread_over_first_anchor():
-    """real case that motivated preferring a fuller anticodon-stem thread across
-    tiers instead of stopping at the first clean anchor: mt-Cys anchors cleanly
-    against TRNAinf-bact.cm, but that CM only threads 3 of the anticodon stem's
-    5 canonical pairs -- Metazoa_C.cm threads all 5 for the identical sequence.
-    a short thread must not disqualify the first tier outright (a real
-    anticodon stem can genuinely be shorter than 5bp), but a later tier that
-    reaches the full canonical count must still win, since the end-to-end
-    consequence of accepting the short thread is a shifted anticodon
-    (verified via the no-unlabeled / anticodon-at-34-36 invariant)."""
+    """S. pombe mt-Cys anchors cleanly against TRNAinf-bact.cm, but that CM
+    only threads 3 of the anticodon stem's 5 canonical pairs; Metazoa_C.cm
+    threads all 5 for the identical sequence. a short thread doesn't
+    disqualify a tier outright (a real anticodon stem can genuinely be
+    shorter than 5bp), but a later tier that reaches the full canonical
+    count wins over one that doesn't, since accepting the short thread would
+    otherwise shift the anticodon (verified via the no-unlabeled /
+    anticodon-at-34-36 invariant)."""
     tier_dir = os.path.join(DATA_DIR, "full_tRNAs_mitofinder_tRNAScanSE")
     header = "mt-tRNA-Cys-GCA-1-1"
-    seq = "GAUAAUGUUCAGUGGUCUGAAAUUGAAUUUGCAAAAUUUGAUAUAUGAGUUCAAUUCUCAUCAUUAUCU"
+    seq = _load_fasta_file(SPOMBE_MT_FA)[header]
 
     bact_only = sprinx.select_cm_and_align(header, seq, BACT_CM, {})
     idx = bact_only["diagnosis"]["anticodon_stem_index"]
@@ -347,13 +346,13 @@ def test_resolve_canonical_for_tier_disambiguates_bare_isoacceptor_by_anticodon(
     covers both anticodons), so a per-AA tier with separate L1/L2 CMs has to
     resolve a bare aa code some way other than a direct dict lookup. real
     Metazoa_L1.cm/L2.cm both structurally anchor either real Leu anticodon
-    equally well (the filename split isn't a biological distinction the
-    anchor check can see -- consistent with the module's own principle that
-    isoacceptor filenames are arbitrary, never load-bearing), so this can't
-    assert which specific file comes back. what's load-bearing: resolution
-    never fails silently (a bare code always returns *some* real candidate,
-    not None) and is deterministic (same header+seq -> same CM every call,
-    since a flaky pick would make Sprinzl output non-reproducible)."""
+    equally well, since the filename split isn't itself something the anchor
+    check can see, consistent with isoacceptor filenames being arbitrary
+    labels rather than a structural distinction. so this can't assert which
+    specific file comes back; what matters instead is that resolution never
+    fails silently (a bare code always returns *some* real candidate, not
+    None) and is deterministic (same header+seq -> same CM every call, since
+    a flaky pick would make Sprinzl output non-reproducible)."""
     tier_dir = os.path.join(DATA_DIR, "full_tRNAs_mitofinder_tRNAScanSE")
     tier = sprinx.index_canonical_cms(tier_dir)
     assert {"L1", "L2"} <= set(tier)
