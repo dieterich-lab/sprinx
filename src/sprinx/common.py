@@ -27,6 +27,7 @@ header format (pipe-delimited):
   field 2 (or the fallback aa) only identifies aa.
 """
 
+import importlib.resources
 import os
 import re
 import subprocess
@@ -171,6 +172,33 @@ def header_to_taxon(header):
 
 
 # --- CM library ---
+
+def package_data_path(*parts):
+    """resolve a path under sprinx's installed package data (src/sprinx/data/),
+    e.g. package_data_path("cyto_cm", "TRNAinf-euk-iso"). used for the bundled
+    default CM databases; assumes a normal (non-zipped) install."""
+    return str(importlib.resources.files("sprinx").joinpath("data", *parts))
+
+
+def check_cm_format(cm_path):
+    """run cmstat on a CM file (single-model or multi-model) and raise a
+    clear error if it fails. catches an unsupported format up front, at
+    startup - e.g. old INFERNAL-1.0 CMs, which cmalign also refuses, but
+    only after failing deep inside a worker process with a bare Infernal
+    error and no indication which supplied CM caused it."""
+    stdout, stderr, rc = run(["cmstat", cm_path])
+    if rc != 0:
+        raise ValueError(f"CM file {cm_path!r} failed cmstat's format check "
+                         f"(rc={rc}): {stderr.strip()}")
+
+
+def check_cm_source_formats(source):
+    """check_cm_format for a --canonical-cm/--cyto-cm-db source: a single CM
+    file, or a directory (checked recursively via find_cm_files)."""
+    paths = find_cm_files(source) if os.path.isdir(source) else [source]
+    for path in paths:
+        check_cm_format(path)
+
 
 def find_cm_files(cm_dir):
     """recursively list all .cm files under cm_dir."""

@@ -13,7 +13,7 @@ requirements (all must be set to run any test here):
   SPRINX_ARMLESS_CM_DIR : directory of armless CMs (only for rerouting tests)
 
 run:
-  SPRINX_CANONICAL_CM=data/mito/TRNAinf-euk.cm SPRINX_ARMLESS_CM_DIR=data/mito/truncated_cm/ \\
+  SPRINX_CANONICAL_CM=data/mito/TRNAinf-euk.cm SPRINX_ARMLESS_CM_DIR=src/sprinx/data/mito_cm/armless/ \\
   pytest test_sprinx_integration.py -v
 """
 import os
@@ -36,9 +36,10 @@ need_armless = pytest.mark.skipif(
 
 BUNDLE_PATH = os.path.join(os.path.dirname(__file__), "test_data_bundle.txt")
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "mito")
-BACT_CM = os.path.join(DATA_DIR, "full_tRNAs_mitofinder_tRNAScanSE", "TRNAinf-bact.cm")
-METAZOA_Y_CM = os.path.join(DATA_DIR, "full_tRNAs_mitofinder_tRNAScanSE", "Metazoa_Y.cm")
-TRUNCATED_CM_DIR = os.path.join(DATA_DIR, "truncated_cm")
+CM_DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "src", "sprinx", "data", "mito_cm")
+BACT_CM = os.path.join(CM_DATA_DIR, "canonical", "TRNAinf-bact.cm")
+METAZOA_Y_CM = os.path.join(CM_DATA_DIR, "canonical", "mitofinder_models", "Metazoa_Y.cm")
+TRUNCATED_CM_DIR = os.path.join(CM_DATA_DIR, "armless")
 SPOMBE_MT_FA = os.path.join(DATA_DIR, "spombe_mt.no_linker.fa")
 
 
@@ -266,7 +267,7 @@ def test_doubly_armless_d_arm_with_zero_compatible_pairs_is_absent():
     this via MIN_COMPATIBLE_PAIRS even though the raw pair count alone clears
     MIN_STEM_PAIRS, so the sequence reroutes to the d_and_t armless CM rather
     than t-only."""
-    tier_dir = os.path.join(DATA_DIR, "full_tRNAs_mitofinder_tRNAScanSE")
+    tier_dir = os.path.join(CM_DATA_DIR, "canonical", "mitofinder_models")
     fasta = os.path.join(DATA_DIR, "both_armless.fa")
     header = "NC_008640.1:3214-3260|Ile|GAU|Romanomermis_culicivorax"
     seq = _load_fasta_file(fasta)[header]
@@ -284,7 +285,7 @@ def test_doubly_armless_d_arm_with_zero_compatible_pairs_is_absent():
 
 need_bact_and_metazoa_c = pytest.mark.skipif(
     not (CMALIGN_OK and os.path.exists(BACT_CM)
-         and os.path.exists(os.path.join(DATA_DIR, "full_tRNAs_mitofinder_tRNAScanSE", "Metazoa_C.cm"))),
+         and os.path.exists(os.path.join(CM_DATA_DIR, "canonical", "mitofinder_models", "Metazoa_C.cm"))),
     reason="requires: cmalign, TRNAinf-bact.cm, Metazoa_C.cm")
 
 
@@ -298,7 +299,7 @@ def test_tier_prefers_fuller_anticodon_stem_thread_over_first_anchor():
     count wins over one that doesn't, since accepting the short thread would
     otherwise shift the anticodon (verified via the no-unlabeled /
     anticodon-at-34-36 invariant)."""
-    tier_dir = os.path.join(DATA_DIR, "full_tRNAs_mitofinder_tRNAScanSE")
+    tier_dir = os.path.join(CM_DATA_DIR, "canonical", "mitofinder_models")
     header = "mt-tRNA-Cys-GCA-1-1"
     seq = _load_fasta_file(SPOMBE_MT_FA)[header]
 
@@ -340,7 +341,7 @@ def test_tiered_canonical_falls_back_to_bacterial():
 
 need_bact_armless = pytest.mark.skipif(
     not (CMALIGN_OK and os.path.exists(BACT_CM) and os.path.isdir(TRUNCATED_CM_DIR)),
-    reason="requires: cmalign, TRNAinf-bact.cm, data/mito/truncated_cm/")
+    reason="requires: cmalign, TRNAinf-bact.cm, src/sprinx/data/mito_cm/armless/")
 
 
 @need_bact_armless
@@ -378,7 +379,7 @@ def test_resolve_canonical_for_tier_disambiguates_bare_isoacceptor_by_anticodon(
     fails silently (a bare code always returns *some* real candidate, not
     None) and is deterministic (same header+seq -> same CM every call, since
     a flaky pick would make Sprinzl output non-reproducible)."""
-    tier_dir = os.path.join(DATA_DIR, "full_tRNAs_mitofinder_tRNAScanSE")
+    tier_dir = os.path.join(CM_DATA_DIR, "canonical", "mitofinder_models")
     tier = mito.index_canonical_cms(tier_dir)
     assert {"L1", "L2"} <= set(tier)
 

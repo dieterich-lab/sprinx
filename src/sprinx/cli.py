@@ -24,7 +24,7 @@ import pandas as pd
 from Bio import SeqIO
 from loguru import logger
 
-from sprinx.common import _configure_logging
+from sprinx.common import _configure_logging, check_cm_source_formats
 
 MITO_SCHEME = "mito"
 CYTO_SCHEMES = ("euk", "arch", "bact")
@@ -53,19 +53,37 @@ def _write_output(results, records, out_path):
     if n_failed:
         logger.warning(f"{n_failed}/{len(records)} sequences produced no output")
 
+    n_unanchored = sum(1 for r in results if r["rows"]
+                       and r["rows"][0]["arm_loss_call"].startswith("UNANCHORED_fallback"))
+    if n_unanchored:
+        logger.warning(f"{n_unanchored}/{len(records)} sequences had an unanchored anticodon "
+                       "(UNANCHORED_fallback) - less reliable than an anchored call, see README")
+
     os.makedirs(os.path.dirname(os.path.abspath(out_path)) or ".", exist_ok=True)
     pd.DataFrame(all_rows).to_csv(out_path, sep="\t", index=False)
     logger.info(f"table: {out_path}")
 
 
 def _run_mito(args, records):
-    from sprinx.mito import index_armless_cms, index_canonical_cms, process_mito_record
+    from sprinx.mito import (
+        default_armless_cm_dir,
+        default_canonical_cm_sources,
+        index_armless_cms,
+        index_canonical_cms,
+        process_mito_record,
+    )
 
-    armless_cm_index = index_armless_cms(args.armless_cm_dir)
+    armless_cm_dir = args.armless_cm_dir or default_armless_cm_dir()
+    canonical_cm_sources = args.canonical_cm or default_canonical_cm_sources()
+
+    for source in [armless_cm_dir] + canonical_cm_sources:
+        check_cm_source_formats(source)
+
+    armless_cm_index = index_armless_cms(armless_cm_dir)
 
     canonical_cm_tiers = []
     tier_descs = []
-    for source in args.canonical_cm:
+    for source in canonical_cm_sources:
         if os.path.isdir(source):
             tier_index = index_canonical_cms(source)
             canonical_cm_tiers.append(tier_index)
@@ -85,11 +103,18 @@ def _run_mito(args, records):
 
 
 def _run_cyto(args, records):
-    raise NotImplementedError(
-        f"--scheme {args.scheme} (cytosolic/nuclear) is not implemented yet; "
-        "only --scheme mito is currently supported. See sprinx.cyto (in "
-        "progress) for the combined-CM-database selection module."
-    )
+    from sprinx.cyto import default_cm_db_path, index_isotype_cms, process_cyto_record
+
+    cm_db = args.cyto_cm_db or default_cm_db_path(args.scheme)
+    check_cm_source_formats(cm_db)
+    isotype_index = index_isotype_cms(cm_db)
+
+    logger.info(f"{len(records)} sequences, isotype CM database: {cm_db} "
+                f"({len(isotype_index)} CMs), {args.processes} worker process(es)")
+
+    tasks = [(header, seq, cm_db, isotype_index, args.debug)
+             for header, seq in records]
+    return _run_pool(process_cyto_record, tasks, args.processes)
 
 
 def main():
@@ -111,10 +136,17 @@ def main():
                              "source whose alignment anchors the anticodon unambiguously is "
                              "used; earlier sources take priority (e.g. a bacterial CM first, "
                              "then a metazoan per-AA directory, since a CM built for the wrong "
-                             "clade can fail to thread a divergent loop)")
+                             "clade can fail to thread a divergent loop). default: sprinx's "
+                             "bundled bacterial + metazoan per-AA CMs (covers metazoan "
+                             "mitochondrial tRNAs; supply your own for a different clade)")
     parser.add_argument("--armless-cm-dir",
                         help="(--scheme mito only) directory (searched recursively) for "
-                             "armless_trn{AA}_wo_{d,t,d_and_t}.cm files")
+                             "armless_trn{AA}_wo_{d,t,d_and_t}.cm files. default: sprinx's "
+                             "bundled armless CM library (Ozerova et al. 2024)")
+    parser.add_argument("--cyto-cm-db",
+                        help="(--scheme euk/arch/bact only) path to that domain's pressed "
+                             "combined CM database, one CM per amino acid. default: sprinx's "
+                             "bundled tRNAscan-SE per-isotype database for the given --scheme")
     parser.add_argument("--out", default="sprinzl_mapping.tsv",
                         help="output TSV path (default: sprinzl_mapping.tsv); includes a "
                              "'structure' column so scripts/visualize_ss.py can render it "
@@ -124,9 +156,6 @@ def main():
     parser.add_argument("--debug", action="store_true",
                         help="log alignment, arm-loss diagnosis, and CM routing for every sequence")
     args = parser.parse_args()
-
-    if args.scheme == MITO_SCHEME and (not args.canonical_cm or not args.armless_cm_dir):
-        parser.error("--scheme mito requires --canonical-cm and --armless-cm-dir")
 
     if args.debug:
         _configure_logging("DEBUG")

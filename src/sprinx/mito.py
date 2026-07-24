@@ -90,6 +90,7 @@ from sprinx.common import (
     find_cm_files,
     get_stem_loop_elements,
     _forgi_stem_groups,
+    package_data_path,
     _pick_by_anticodon_anchor,
     _scan_cm_files,
     header_to_aa,
@@ -100,6 +101,21 @@ from sprinx.common import (
     find_anticodon_stem_index,
     _configure_logging,
 )
+
+
+def default_canonical_cm_sources():
+    """bundled default --canonical-cm sources: bacterial whole-family CM
+    first, then a per-AA metazoan directory. covers metazoan mitochondrial
+    tRNAs; a different clade needs its own CMs supplied via --canonical-cm."""
+    canonical_dir = package_data_path("mito_cm", "canonical")
+    return [os.path.join(canonical_dir, "TRNAinf-bact.cm"),
+            os.path.join(canonical_dir, "mitofinder_models")]
+
+
+def default_armless_cm_dir():
+    """bundled default --armless-cm-dir: armless_trn{AA}_wo_{d,t,d_and_t}.cm
+    files (Ozerova et al. 2024)."""
+    return package_data_path("mito_cm", "armless")
 
 # anticodon arm is the 2nd inner stem-loop (0-indexed) in a canonical cloverleaf;
 # topological fact, not tunable; changing it requires a different CM.
@@ -273,6 +289,17 @@ def classify_arm_loss(header, aligned_seq, ss_cons,
             missing_downstream = other_missing + [t_arm_idx]
             result["call"] = f"T_OR_VAR_ARM_MISSING_slots={missing_downstream}"
             result["missing_arm"] = "t"
+            if n == 3:
+                # exactly D, C, T stem-loops: the 3rd is always read as the
+                # T-arm. an ordinary D-C-T cloverleaf with no variable arm
+                # and a real variable arm with the T-arm actually missing
+                # produce the same 3-stem-loop shape; there's no structural
+                # way to tell them apart (see README Limitations).
+                logger.warning(
+                    f"{header}: T-arm flagged absent with exactly 3 stem-loops found; "
+                    "this call can't distinguish real T-arm loss from an unmodeled "
+                    "variable arm - see README's 3-stem-loop limitation"
+                )
         elif other_missing:
             result["call"] = f"T_OR_VAR_ARM_MISSING_slots={other_missing}"
         else:
