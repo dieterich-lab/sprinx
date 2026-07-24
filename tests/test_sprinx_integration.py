@@ -13,7 +13,7 @@ requirements (all must be set to run any test here):
   SPRINX_ARMLESS_CM_DIR : directory of armless CMs (only for rerouting tests)
 
 run:
-  SPRINX_CANONICAL_CM=data/TRNAinf-euk.cm SPRINX_ARMLESS_CM_DIR=data/truncated_cm/ \\
+  SPRINX_CANONICAL_CM=data/mito/TRNAinf-euk.cm SPRINX_ARMLESS_CM_DIR=data/mito/truncated_cm/ \\
   pytest test_sprinx_integration.py -v
 """
 import os
@@ -35,7 +35,7 @@ need_armless = pytest.mark.skipif(
     not ARMLESS_CM_DIR, reason="requires: SPRINX_ARMLESS_CM_DIR env var")
 
 BUNDLE_PATH = os.path.join(os.path.dirname(__file__), "test_data_bundle.txt")
-DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
+DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "mito")
 BACT_CM = os.path.join(DATA_DIR, "full_tRNAs_mitofinder_tRNAScanSE", "TRNAinf-bact.cm")
 METAZOA_Y_CM = os.path.join(DATA_DIR, "full_tRNAs_mitofinder_tRNAScanSE", "Metazoa_Y.cm")
 TRUNCATED_CM_DIR = os.path.join(DATA_DIR, "truncated_cm")
@@ -146,7 +146,7 @@ need_bact = pytest.mark.skipif(
 @need_bact
 def test_patch_overrides_weak_pre_existing_pair_real_data():
     """a real threading-failure span (S. pombe mt-Cys's D-arm under
-    TRNAinf-bact.cm, from data/spombe_mt.no_linker.fa) can thread so
+    TRNAinf-bact.cm, from data/mito/spombe_mt.no_linker.fa) can thread so
     weakly that only one pair survives (below MIN_STEM_PAIRS). RNAfold's fold
     of the same span agrees with that pair and extends it to a full 3bp
     D-stem: the patch applies over the pre-existing single pair rather than
@@ -340,7 +340,7 @@ def test_tiered_canonical_falls_back_to_bacterial():
 
 need_bact_armless = pytest.mark.skipif(
     not (CMALIGN_OK and os.path.exists(BACT_CM) and os.path.isdir(TRUNCATED_CM_DIR)),
-    reason="requires: cmalign, TRNAinf-bact.cm, data/truncated_cm/")
+    reason="requires: cmalign, TRNAinf-bact.cm, data/mito/truncated_cm/")
 
 
 @need_bact_armless

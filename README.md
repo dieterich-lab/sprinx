@@ -42,7 +42,7 @@ renders the result as an R2DT 2D structure plot.
    labels on the alignment already in hand.
 
 Exact thresholds and function names for each step are in the module
-docstring at the top of [src/sprinx/label.py](src/sprinx/label.py).
+docstring at the top of [src/sprinx/mito.py](src/sprinx/mito.py).
 
 ## Installation
 
@@ -66,16 +66,16 @@ per-command alternative to activating.
 
 Three commands, in order, from a FASTA of mt-tRNAs to a Sprinzl-labeled TSV,
 QuTRNA2's `seq_to_sprinzl.tsv` format, and a PNG of the 2D structures. They
-use the CMs and FASTA fixtures already checked into `data/`, so they run
+use the CMs and FASTA fixtures already checked into `data/mito/`, so they run
 as-is from a clone with no extra downloads (assumes the venv above is
 activated, and `cmalign` and an R2DT Singularity image are on `PATH`; see
 "Dependencies not on PyPI" below):
 
 ```bash
-sprinx --fasta data/canonical.fa \
-    --canonical-cm data/full_tRNAs_mitofinder_tRNAScanSE/TRNAinf-bact.cm \
-                   data/full_tRNAs_mitofinder_tRNAScanSE \
-    --armless-cm-dir data/truncated_cm/ \
+sprinx --scheme mito --fasta data/mito/canonical.fa \
+    --canonical-cm data/mito/full_tRNAs_mitofinder_tRNAScanSE/TRNAinf-bact.cm \
+                   data/mito/full_tRNAs_mitofinder_tRNAScanSE \
+    --armless-cm-dir data/mito/truncated_cm/ \
     --out sprinzl_mapping.tsv
 
 python scripts/convert_output_to_qutrna2-seq_to_sprinzl.py sprinzl_mapping.tsv
@@ -109,14 +109,14 @@ bacterial ancestry makes it a good default guess), then a per-AA metazoan
 directory:
 
 ```bash
-sprinx --fasta my_mt_trnas.fa \
+sprinx --scheme mito --fasta my_mt_trnas.fa \
     --canonical-cm /path/to/cms/TRNAinf-bact.cm /path/to/cms/metazoan_per_aa/ \
     --armless-cm-dir /path/to/armless_cms/ \
     --out sprinzl_mapping.tsv
 ```
 
-The repo's `data/` directory holds the CMs and FASTA fixtures the test suite
-and the examples above use; see "Layout" below.
+The repo's `data/mito/` directory holds the CMs and FASTA fixtures the test
+suite and the examples above use; see "Layout" below.
 
 ## Limitations
 
@@ -160,7 +160,7 @@ sprinx instead tries one canonical model at a
 time and only moves on when that model's alignment doesn't actually anchor
 the anticodon. The full mechanism, including how a missing arm is told apart
 from a misaligned one, is in the module docstring at the top of
-[src/sprinx/label.py](src/sprinx/label.py); read it before touching the
+[src/sprinx/mito.py](src/sprinx/mito.py); read it before touching the
 arm-loss logic.
 
 ## Header format
@@ -267,7 +267,9 @@ position for the label, or `-` if the label doesn't occur in that sequence.
 
 ```
 src/sprinx/
-  label.py                   alignment, arm-loss classification, Sprinzl assignment
+  common.py                   shared structural parsing + Sprinzl-label assignment (forgi
+                                topology, sprinzl_map); no mito or cytosolic awareness
+  mito.py                      canonical-CM tiering, arm-loss diagnosis, armless-CM rerouting
   cli.py                      argument parsing, per-record orchestration (console script `sprinx`)
 scripts/
   visualize_ss.py             standalone R2DT 2D-diagram rendering, not part of the package
@@ -277,38 +279,41 @@ recipe/
   meta.yaml                    conda recipe (bioconda-recipes conventions)
 conftest.py                  pytest setup, loads .env / SPRINX_* vars for integration tests
 env.example                  template for .env
-data/                        example FASTA, canonical CM, armless CM library
-  README.md                    data curation notes: evidence-tier definitions used in
+data/
+  mito/                       example FASTA, canonical CM, armless CM library for --scheme mito
+    README.md                   data curation notes: evidence-tier definitions used in
                                 curation_metadata.tsv
-  curation_metadata.tsv        per-sequence literature evidence for each armless/doubly-armless
+    curation_metadata.tsv       per-sequence literature evidence for each armless/doubly-armless
                                 fixture entry (species, category, evidence tier, source DOI, notes)
-  canonical.fa                 36 real cloverleaf mt-tRNAs (human, mouse, S. cerevisiae,
+    canonical.fa                36 real cloverleaf mt-tRNAs (human, mouse, S. cerevisiae,
                                 S. pombe), ground truth for "no arm-loss call should fire"
-  D_armless.fa                 4 real D-armless mt-tRNAs, ground truth for missing_arm="d";
+    D_armless.fa                4 real D-armless mt-tRNAs, ground truth for missing_arm="d";
                                 curated with literature evidence, see curation_metadata.tsv
-  T_armless.fa                 4 real T-armless mt-tRNAs (Ascaris suum), ground truth for
+    T_armless.fa                4 real T-armless mt-tRNAs (Ascaris suum), ground truth for
                                 missing_arm="t"; curated with literature evidence, see
                                 curation_metadata.tsv
-  both_armless.fa             3 real doubly-armless mt-tRNAs (R. culicivorax), ground truth
+    both_armless.fa            3 real doubly-armless mt-tRNAs (R. culicivorax), ground truth
                                 for missing_arm="d_and_t"; curated with literature evidence,
                                 see curation_metadata.tsv
-  spombe_mt.no_linker.fa     25 S. pombe mt-tRNAs (linker sequence trimmed), used as a
+    spombe_mt.no_linker.fa    25 S. pombe mt-tRNAs (linker sequence trimmed), used as a
                                 source of real sequences in integration tests
-  TRNAinf-euk.cm                eukaryotic whole-family canonical CM (QutRNA2)
-  mitofinder_models/           symlink to canonical CMs from MitoFinder, old INFERNAL-1 [1.0] format;
+    TRNAinf-euk.cm               eukaryotic whole-family canonical CM (QutRNA2)
+    mitofinder_models/          symlink to canonical CMs from MitoFinder, old INFERNAL-1 [1.0] format;
                                 cmalign (Infernal 1.1.x) refuses these outright
-  full_tRNAs_mitofinder_tRNAScanSE/ same CMs reformatted to current INFERNAL1/a via
+    full_tRNAs_mitofinder_tRNAScanSE/ same CMs reformatted to current INFERNAL1/a via
                                 `cmconvert -a`, one file in, one file out, same filename;
                                 includes `TRNAinf-bact.cm`/`TRNAinf-euk.cm` (whole-family)
                                 and per-AA `Metazoa_{AA}.cm` files; originals in
                                 mitofinder_models/ are untouched; regenerate with:
-                                `for f in data/mitofinder_models/*.cm; do
-                                cmconvert -a "$f" > "data/full_tRNAs_mitofinder_tRNAScanSE/$(basename "$f")"; done`
-  truncated_cm/                armless CM library, `armless_trn{AA}_wo_{d,t,d_and_t}.cm`
+                                `for f in data/mito/mitofinder_models/*.cm; do
+                                cmconvert -a "$f" > "data/mito/full_tRNAs_mitofinder_tRNAScanSE/$(basename "$f")"; done`
+    truncated_cm/                armless CM library, `armless_trn{AA}_wo_{d,t,d_and_t}.cm`
                                 (Ozerova et al. 2024), used for --armless-cm-dir
-  combined.cm*                 unused leftover from an earlier cmscan/combined-CM-database
+    combined.cm*                 unused leftover from an earlier cmscan/combined-CM-database
                                 exploration (see "Why not just pick the best-scoring model?"
                                 above); not read by any current code path
+  cyto/                        combined-CM-database + curated fixtures for --scheme euk/arch/bact
+                                (in progress)
 tests/
   test_sprinx_unit.py          unit tests, run anywhere
   test_sprinx_integration.py   runs real cmalign / RNAfold end to end
