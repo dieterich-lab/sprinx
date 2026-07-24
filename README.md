@@ -19,39 +19,50 @@ renders the result as an R2DT 2D structure plot.
 
 ## Installation
 
-The recommended path is conda/mamba, since it also installs `cmalign`
-(Infernal) and the ViennaRNA bindings for you:
-
-```bash
-conda install -c bioconda -c conda-forge sprinx    # or: mamba install ...
-```
-
-pip also works, and installs every Python dependency (including the
-ViennaRNA bindings and `forgi`, both real PyPI packages), but you still need
-`cmalign` on `PATH` yourself; see "Dependencies not on PyPI" below:
-
-```bash
-pip install sprinx                # once published
-pip install sprinx[viz]           # + scripts/visualize_ss.py's PNG/PDF rendering
-```
-
-From a clone:
+Install from a clone; `cmalign` (Infernal) needs to be on `PATH`
+separately, see "Dependencies not on PyPI" below.
 
 ```bash
 git clone <this repo>
 cd sprinx
-uv sync              # or: pip install -e .
+uv sync --extra viz              # or: pip install -e ".[viz]"
+source .venv/bin/activate        # puts sprinx and this venv's python on PATH
 ```
 
-Either way, the `sprinx` console command is the only way to run it.
+The `--extra viz` / `[viz]` also installs `cairosvg`, needed only for
+`scripts/visualize_ss.py`; leave it off if you only need the labeling TSV.
+Activating the venv is what makes a plain `sprinx` and `python` (not your
+system `python`) resolve correctly; `uv run <command>` is an equivalent
+per-command alternative to activating.
+
+## Quick start
+
+Three commands, in order, from a FASTA of mt-tRNAs to a Sprinzl-labeled TSV,
+QuTRNA2's `seq_to_sprinzl.tsv` format, and a PNG of the 2D structures. They
+use the CMs and FASTA fixtures already checked into `data/`, so they run
+as-is from a clone with no extra downloads (assumes the venv above is
+activated, and `cmalign` and an R2DT Singularity image are on `PATH`; see
+"Dependencies not on PyPI" below):
+
+```bash
+sprinx --fasta data/canonical.fa \
+    --canonical-cm data/full_tRNAs_mitofinder_tRNAScanSE/TRNAinf-bact.cm \
+                   data/full_tRNAs_mitofinder_tRNAScanSE \
+    --armless-cm-dir data/truncated_cm/ \
+    --out sprinzl_mapping.tsv
+
+python scripts/convert_output_to_qutrna2-seq_to_sprinzl.py sprinzl_mapping.tsv
+
+python scripts/visualize_ss.py --tsv sprinzl_mapping.tsv --out cloverleaves.png
+```
 
 ## Dependencies not on PyPI
 
 - `cmalign`, from [Infernal](http://eddylab.org/infernal/) >=1.1.4. Not a
   Python package; install via bioconda, a system package manager, or from
   source. (The `ViennaRNA` and `forgi` Python packages sprinx also needs are
-  both on PyPI and install automatically with `pip install sprinx`.)
-- An [R2DT](https://r2dt.bio) Singularity image, only if you use
+  both on PyPI and install automatically with `pip install -e .`.)
+- An [R2DT](https://r2dt.bio) Singularity image placed in `lib/r2dt`, only if you use
   `scripts/visualize_ss.py`.
 
 ## CM files (not bundled)
@@ -200,7 +211,7 @@ side rather than assumed.
 ### Converting to QuTRNA2's format
 
 ```bash
-python convert_output_to_qutrna2-seq_to_sprinzl.py sprinzl_mapping.tsv
+python scripts/convert_output_to_qutrna2-seq_to_sprinzl.py sprinzl_mapping.tsv
 # -> sprinzl_mapping.seq_to_sprinzl.tsv
 ```
 
@@ -217,10 +228,10 @@ src/sprinx/
   cli.py                      argument parsing, per-record orchestration (console script `sprinx`)
 scripts/
   visualize_ss.py             standalone R2DT 2D-diagram rendering, not part of the package
+  convert_output_to_qutrna2-seq_to_sprinzl.py
+                             converts sprinx's output TSV to QuTRNA2's seq_to_sprinzl.tsv format
 recipe/
   meta.yaml                    conda recipe (bioconda-recipes conventions)
-convert_output_to_qutrna2-seq_to_sprinzl.py
-                             converts sprinx's output TSV to QuTRNA2's seq_to_sprinzl.tsv format
 conftest.py                  pytest setup, loads .env / SPRINX_* vars for integration tests
 env.example                  template for .env
 data/                        example FASTA, canonical CM, armless CM library
