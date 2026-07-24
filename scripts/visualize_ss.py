@@ -5,7 +5,7 @@ visualize_ss.py: R2DT-rendered 2D diagrams for a sprinx TSV.
 standalone script, not part of the installable sprinx package: R2DT needs a
 Singularity image, which is unnecessary for anything just consuming
 sprinx's TSV output (e.g. QutRNA2). needs sprinx itself installed (for
-sprinx.label's header parsing and subprocess helpers) plus its own extra
+sprinx.common's header parsing and subprocess helpers) plus its own extra
 dependency, cairosvg (`pip install cairosvg`), and a Singularity/R2DT image
 (see README for setup).
 
@@ -46,7 +46,7 @@ import cairosvg
 import pandas as pd
 from loguru import logger
 
-from sprinx.label import header_to_aa, header_to_taxon, run
+from sprinx.common import header_to_aa, header_to_taxon, run
 
 R2DT_DEFAULT_IMAGE = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "lib", "r2dt")

@@ -1,5 +1,5 @@
 """
-test_sprinx_unit.py: unit tests for sprinx.label.
+test_sprinx_unit.py: unit tests for sprinx.common and sprinx.mito.
 
 no subprocess calls; infernal not required. pre-computed cmalign Stockholm
 alignments are in test_data_bundle.txt (==> name <== markers, produced with
@@ -17,7 +17,7 @@ import re
 import pytest
 import RNA
 
-from sprinx import label as sprinx
+from sprinx import common, mito
 
 BUNDLE_PATH = os.path.join(os.path.dirname(__file__), "test_data_bundle.txt")
 
@@ -32,7 +32,7 @@ BUNDLE = load_bundle()
 
 
 def load_sto(name):
-    return sprinx.parse_multi_sto(BUNDLE[name], from_text=True)
+    return common.parse_multi_sto(BUNDLE[name], from_text=True)
 
 
 def load_fa(name):
@@ -73,12 +73,12 @@ def _monotonic(sprinzl):
 
 def _region(label):
     base = re.match(r"e?\d+", label).group() if label else None
-    return sprinx.SPRINZL_REGION.get(base)
+    return common.SPRINZL_REGION.get(base)
 
 
 def _seq_with_anticodon(ss, stem_index, anticodon):
     """all-A sequence with `anticodon` placed in inner-stem `stem_index`'s loop."""
-    topo = sprinx.parse_topology(ss)
+    topo = common.parse_topology(ss)
     seq = list("A" * len(ss))
     for k, base in enumerate(anticodon):
         seq[topo["inner_stems"][stem_index]["loop_cols"][k]] = base
@@ -92,7 +92,7 @@ def _seq_with_anticodon(ss, stem_index, anticodon):
 def test_drop_orphan_brackets_makes_ptable_safe():
     orphaned = "(((((((..((((......)))).(((((.......)))))....................)))))))"
     mangled = orphaned[:5] + ")" + orphaned[6:]   # one unmatched ')'
-    assert RNA.ptable(sprinx.drop_orphan_brackets(mangled)) is not None
+    assert RNA.ptable(common.drop_orphan_brackets(mangled)) is not None
 
 
 # -----------------------------------------------------------------------
@@ -113,8 +113,8 @@ def test_header_field_extraction():
         ("mt-tRNA-Met-CAT-1-2", "CAU", "Met"),
     ]
     for header, anticodon, aa in cases:
-        assert sprinx.header_to_anticodon(header) == anticodon, header
-        assert sprinx.header_to_aa(header) == aa, header
+        assert common.header_to_anticodon(header) == anticodon, header
+        assert common.header_to_aa(header) == aa, header
 
 
 # -----------------------------------------------------------------------
@@ -126,7 +126,7 @@ def test_canonical36_no_false_positives():
     assert len(seqs) == 36
     t_flagged, d_flagged, n_unanchored = [], [], 0
     for name, aligned in seqs.items():
-        d = sprinx.classify_arm_loss(name, aligned, ss)
+        d = mito.classify_arm_loss(name, aligned, ss)
         if d["missing_arm"] == "t":
             t_flagged.append(name)
         if d["missing_arm"] == "d":
@@ -148,26 +148,26 @@ def test_arm_loss_diagnosis_per_structural_class():
                      ("aln_L1_canonical_qutrna.sto", "Leu1|UAG|Homo")]:
         seqs, ss = load_sto(sto)
         name = next(k for k in seqs if tag in k)
-        d = sprinx.classify_arm_loss(name, seqs[name], ss)
+        d = mito.classify_arm_loss(name, seqs[name], ss)
         assert d["missing_arm"] is None and d["register_offset"] in (0, None), (tag, d["call"])
     # D-armless: register shift offset==1
     seqs, ss = load_sto("aln_S1_qutrna.sto")
     for name, aligned in seqs.items():
-        d = sprinx.classify_arm_loss(name, aligned, ss)
+        d = mito.classify_arm_loss(name, aligned, ss)
         if d["anticodon_stem_index"] is not None:
             assert d["register_offset"] == 1, (name, d["call"])
     # T-armless: never a D-arm call, and no register shift (downstream loss)
     seqs, ss = load_sto("aln_Tarmless_qutrna.sto")
     assert len(seqs) == 17
     for name, aligned in seqs.items():
-        d = sprinx.classify_arm_loss(name, aligned, ss)
+        d = mito.classify_arm_loss(name, aligned, ss)
         assert d["missing_arm"] != "d", (name, d["call"])
         if d["anticodon_stem_index"] is not None:
             assert d["register_offset"] == 0, (name, d["call"])
     # doubly-armless
     seqs, ss = load_sto("aln_both_armless_mature.sto")
     name = "NC_008640.1:3203-3266|Romanomermis_culicivorax|Ile|GAU"
-    assert sprinx.classify_arm_loss(name, seqs[name], ss)["missing_arm"] in ("d", "ambiguous", "d_and_t")
+    assert mito.classify_arm_loss(name, seqs[name], ss)["missing_arm"] in ("d", "ambiguous", "d_and_t")
 
 
 def test_d_arm_absent_without_register_shift():
@@ -176,32 +176,32 @@ def test_d_arm_absent_without_register_shift():
     while leaving the anticodon anchor untouched."""
     seqs, ss = load_sto("aln_canonical36_qutrna_flags.sto")
     name = next(k for k in seqs if "Thr|UGU|Homo" in k)
-    base = sprinx.classify_arm_loss(name, seqs[name], ss)
+    base = mito.classify_arm_loss(name, seqs[name], ss)
     assert base["missing_arm"] is None, "needs a canonical baseline"
-    d_elem = sprinx.get_stem_loop_elements(ss)[base["anticodon_stem_index"] - 1]
+    d_elem = common.get_stem_loop_elements(ss)[base["anticodon_stem_index"] - 1]
     mutated = list(seqs[name])
     for c in d_elem["stem_cols"]:
         mutated[c] = "-"
     mutated = "".join(mutated)
-    d = sprinx.classify_arm_loss(name, mutated, ss)
+    d = mito.classify_arm_loss(name, mutated, ss)
     assert d["register_offset"] == 0 and d["missing_arm"] == "d"
     assert d["call"].startswith("UPSTREAM_ARM_MISSING_slot=")
-    assert not sprinx.arm_span_has_enough_sequence(mutated, d_elem)
+    assert not mito.arm_span_has_enough_sequence(mutated, d_elem)
 
 
 def test_stem_complementarity_and_anticodon_search():
     # T-armless slot: n_pairs==0 (no column has both partners non-gap)
     seqs, ss = load_sto("aln_Tarmless_qutrna.sto")
-    t_elem = sprinx.get_stem_loop_elements(ss)[-1]
+    t_elem = common.get_stem_loop_elements(ss)[-1]
     for name, aligned in seqs.items():
-        assert sprinx.stem_complementarity(aligned, ss, t_elem)["n_pairs"] == 0, name
+        assert common.stem_complementarity(aligned, ss, t_elem)["n_pairs"] == 0, name
     # '.' (multi-seq insert gap) must be stripped alongside '-' before the search,
     # or a '.' in a loop can spuriously match the anticodon.
     seqs, ss = load_sto("aln_canonical36_qutrna_flags.sto")
-    elements = sprinx.get_stem_loop_elements(ss)
+    elements = common.get_stem_loop_elements(ss)
     glu = next(k for k in seqs if "Glu|UUC|Homo" in k)
     assert "." in seqs[glu]
-    _, method = sprinx.find_anticodon_stem_index(seqs[glu], elements, sprinx.header_to_anticodon(glu))
+    _, method = common.find_anticodon_stem_index(seqs[glu], elements, common.header_to_anticodon(glu))
     assert method == "unique_loop_match"
 
 
@@ -226,8 +226,8 @@ def test_sprinzl_map_real_data_invariants():
     for sto, tag, anticodon, missing_arm in cases:
         seqs, ss_cons = load_sto(sto)
         name = next(k for k in seqs if tag in k)
-        seq, ss = sprinx.finalize_structure({"aligned_seq": seqs[name], "ss_cons": ss_cons})
-        sprinzl = sprinx.sprinzl_map(ss, seq, anticodon, missing_arm)
+        seq, ss = common.finalize_structure({"aligned_seq": seqs[name], "ss_cons": ss_cons})
+        sprinzl = common.sprinzl_map(ss, seq, anticodon, missing_arm)
         assert sprinzl[0] == "1", tag
         assert [i for i in range(len(seq)) if i not in sprinzl] == [], f"{tag}: unlabeled"
         assert _monotonic(sprinzl), f"{tag}: non-monotonic"
@@ -249,10 +249,10 @@ def test_c_stem3_labels_not_overwritten_by_var_loop():
     can't catch a shifted-but-still-increasing run."""
     seqs, ss_cons = load_sto("aln_E_canonical_qutrna.sto")
     name = next(k for k in seqs if "Glu|UUC|Homo" in k)
-    seq, ss = sprinx.finalize_structure({"aligned_seq": seqs[name], "ss_cons": ss_cons})
-    topo = sprinx.parse_topology(ss)
+    seq, ss = common.finalize_structure({"aligned_seq": seqs[name], "ss_cons": ss_cons})
+    topo = common.parse_topology(ss)
     c_stem3 = topo["inner_stems"][1]["stem3_cols"]
-    sprinzl = sprinx.sprinzl_map(ss, seq, "UUC", None)
+    sprinzl = common.sprinzl_map(ss, seq, "UUC", None)
     assert [sprinzl[p] for p in c_stem3] == ["39", "40", "41", "42", "43"]
 
 
@@ -264,8 +264,8 @@ def test_variable_arm_stem_gets_e_series_labels():
     partner, not just present."""
     seqs, ss_cons = load_sto("aln_canonical36_qutrna_flags.sto")
     name = next(k for k in seqs if "Tyr|GUA|Saccharomyces" in k)
-    seq, ss = sprinx.finalize_structure({"aligned_seq": seqs[name], "ss_cons": ss_cons})
-    sprinzl = sprinx.sprinzl_map(ss, seq, "GUA", None)
+    seq, ss = common.finalize_structure({"aligned_seq": seqs[name], "ss_cons": ss_cons})
+    sprinzl = common.sprinzl_map(ss, seq, "GUA", None)
     assert [i for i in range(len(seq)) if i not in sprinzl] == []
     assert _monotonic(sprinzl)
 
@@ -273,7 +273,7 @@ def test_variable_arm_stem_gets_e_series_labels():
     assert {"e11", "e12", "e13", "e1", "e2", "e3", "e4", "e23", "e22", "e21"} <= set(by_label)
     for n in (1, 2, 3):
         pair = (by_label[f"e1{n}"], by_label[f"e2{n}"])
-        assert pair in sprinx.WC_PAIRS, f"e1{n}/e2{n} not complementary: {pair}"
+        assert pair in common.WC_PAIRS, f"e1{n}/e2{n} not complementary: {pair}"
 
 
 def test_assign_anticodon_loop_anchors_on_anticodon_not_loop_edge():
@@ -284,7 +284,7 @@ def test_assign_anticodon_loop_anchors_on_anticodon_not_loop_edge():
     seq = "AAUUGCAUUAA"   # 11nt: 4 before the anticodon, GCA, 4 after
     c_loop = list(range(len(seq)))
     labels = {}
-    sprinx._assign_anticodon_loop(labels, seq, c_loop, "GCA")
+    common._assign_anticodon_loop(labels, seq, c_loop, "GCA")
     assert labels[4] == "34" and labels[5] == "35" and labels[6] == "36"
     assert labels[0] == "32" and labels[1] == "33"
     assert labels[2] == "33A" and labels[3] == "33B"   # overflow before the anchor
@@ -302,7 +302,7 @@ def test_long_unpaired_variable_region_uses_e_loop_not_48_overflow():
     seq = ("A" * 7 + "AAA" + "CCC" + "AAA" + "AAA" + "GGG" + "AAA"
            + "U" * 11 + "AAA" + "AAA" + "AAA" + "A" * 7)
     assert len(ss) == len(seq)
-    sprinzl = sprinx.sprinzl_map(ss, seq, "GGG")
+    sprinzl = common.sprinzl_map(ss, seq, "GGG")
     assert [i for i in range(len(seq)) if i not in sprinzl] == []
     var_loop_start = ss.index("." * 11)
     got = [sprinzl[var_loop_start + i] for i in range(11)]
@@ -321,16 +321,16 @@ def test_forgi_stem_groups():
         "doubly":    "((((............(((((.......))))).........))))....",
     }
     for name, ss in classes.items():
-        groups = sprinx._forgi_stem_groups(ss)
+        groups = common._forgi_stem_groups(ss)
         assert sum(1 for g in groups if not g["loop_cols"]) == 1, f"{name}: acceptor count"
     # doubly-armless: acceptor + C-stem joined by an interior loop must not merge
     # (merging leaves no acceptor and makes parse_topology raise).
-    assert len(sprinx._forgi_stem_groups(classes["doubly"])) == 2
-    topo = sprinx.parse_topology(classes["doubly"])
+    assert len(common._forgi_stem_groups(classes["doubly"])) == 2
+    topo = common.parse_topology(classes["doubly"])
     assert len(topo["acceptor_5"]) == 4 and len(topo["inner_stems"]) == 1
     # 2nt bulge on each acceptor strand must merge into one acceptor group.
     bulged = "(((..((..((((........)))).(((((.......))))).....(((((.......)))))))..)))."
-    topo = sprinx.parse_topology(bulged)
+    topo = common.parse_topology(bulged)
     assert topo["acceptor_5"] == [0, 1, 2, 5, 6]
     assert topo["acceptor_3"] == [65, 66, 69, 70, 71]
 
@@ -353,19 +353,19 @@ def test_structural_bulge_labeling():
         (d_bulge, {18: "D_stem_3", 19: "D_stem_3"}),
     ]
     for ss, checks in region_checks:
-        sprinzl = sprinx.sprinzl_map(ss, _seq_with_anticodon(ss, 1, "UUU"), "UUU")
+        sprinzl = common.sprinzl_map(ss, _seq_with_anticodon(ss, 1, "UUU"), "UUU")
         for col, region in checks.items():
             assert _region(sprinzl.get(col, "")) == region, f"col {col} -> {sprinzl.get(col)}"
 
     # RNAfold-patched 4bp T-stem leaves one unpaired nt (col 52) before the
     # acceptor; it fills the open outermost T-stem-3' slot (65), never blank.
-    sprinzl = sprinx.sprinzl_map(t_short, _seq_with_anticodon(t_short, 1, "UUU"), "UUU")
+    sprinzl = common.sprinzl_map(t_short, _seq_with_anticodon(t_short, 1, "UUU"), "UUU")
     assert sprinzl.get(52) == "65"
 
     # every structure: no position left unlabeled, and labels stay monotonic.
     for ss in (acceptor, d_bulge, t_short):
         seq = _seq_with_anticodon(ss, 1, "UUU")
-        sprinzl = sprinx.sprinzl_map(ss, seq, "UUU")
+        sprinzl = common.sprinzl_map(ss, seq, "UUU")
         assert [i for i in range(len(seq)) if i not in sprinzl] == [], ss
         assert _monotonic(sprinzl), ss
 
@@ -374,11 +374,11 @@ def test_fill_stem_bulges_overflow_and_ownership():
     # 27 consecutive owned gaps: 27th falls back to a 2-char code, not '['.
     ss = "(" + "." * 27 + ")"
     labels = {0: "5"}
-    sprinx._fill_stem_bulges(labels, ss, strands=[[0, len(ss) - 1]])
+    common._fill_stem_bulges(labels, ss, strands=[[0, len(ss) - 1]])
     assert labels[1] == "5A" and labels[26] == "5Z" and labels[27] == "5AA"
     # a gap outside every strand is not a bulge -> left unlabeled so a bug surfaces.
     labels2 = {1: "10", 6: "20"}
-    sprinx._fill_stem_bulges(labels2, ".(....)", strands=[[1, 6]])
+    common._fill_stem_bulges(labels2, ".(....)", strands=[[1, 6]])
     assert 0 not in labels2 and labels2[2] == "10A"
 
 
@@ -387,15 +387,15 @@ def test_three_stem_double_match_picks_middle_stem():
     # C-stem is the middle by position, and a carried-over missing_arm=t must NOT
     # fire the 2-stem shortcut here.
     ss = "(((((((.(((GGG))).(((GGG))).(((AAA))).)))))))"
-    topo = sprinx.parse_topology(ss)
+    topo = common.parse_topology(ss)
     seq = list("A" * len(ss))
     for stem in (0, 1):
         for k, base in enumerate("GGG"):
             seq[topo["inner_stems"][stem]["loop_cols"][k]] = base
     seq = "".join(seq)
     middle = topo["inner_stems"][1]["stem5_cols"]
-    assert sprinx.locate_anticodon_stem(topo, ss, seq, "GGG")["c_stem5"] == middle
-    assert sprinx.locate_anticodon_stem(topo, ss, seq, "GGG", "t")["c_stem5"] == middle
+    assert common.locate_anticodon_stem(topo, ss, seq, "GGG")["c_stem5"] == middle
+    assert common.locate_anticodon_stem(topo, ss, seq, "GGG", "t")["c_stem5"] == middle
 
 
 # -----------------------------------------------------------------------
@@ -406,7 +406,7 @@ def test_finalize_structure_clean_balanced_equal_length():
     for sto in ("aln_E_canonical_qutrna.sto", "aln_S1_qutrna.sto", "aln_Tarmless_qutrna.sto"):
         seqs, ss_cons = load_sto(sto)
         for name, aligned in seqs.items():
-            seq, ss = sprinx.finalize_structure({"aligned_seq": aligned, "ss_cons": ss_cons})
+            seq, ss = common.finalize_structure({"aligned_seq": aligned, "ss_cons": ss_cons})
             assert "." not in seq and "-" not in seq, f"{sto}/{name}"
             assert len(seq) == len(ss) and ss.count("(") == ss.count(")"), f"{sto}/{name}"
 
@@ -419,7 +419,7 @@ class TestArmSpanAndPatch:
 
     def _val(self):
         seqs, ss = load_sto("aln_canonical36_qutrna_flags.sto")
-        return seqs, ss, sprinx.get_stem_loop_elements(ss)
+        return seqs, ss, common.get_stem_loop_elements(ss)
 
     def _synthetic_val_aln(self, seqs, elems):
         base = seqs[next(k for k in seqs if "Val|UAC|Homo" in k)]
@@ -432,23 +432,23 @@ class TestArmSpanAndPatch:
         t_elem = elems[-1]
         val = next(k for k in seqs if "Val|UAC|Homo" in k)
         # Val's real T-arm passes the span check and folds as a hairpin.
-        assert sprinx.arm_span_has_enough_sequence(seqs[val], t_elem)
-        assert all(sprinx.arm_span_has_enough_sequence(a, t_elem) for a in seqs.values())
-        fseq, _ = sprinx.finalize_structure({"aligned_seq": seqs[val], "ss_cons": ss})
-        assert sprinx.arm_is_threading_failure(seqs[val], fseq, t_elem)
+        assert mito.arm_span_has_enough_sequence(seqs[val], t_elem)
+        assert all(mito.arm_span_has_enough_sequence(a, t_elem) for a in seqs.values())
+        fseq, _ = common.finalize_structure({"aligned_seq": seqs[val], "ss_cons": ss})
+        assert mito.arm_is_threading_failure(seqs[val], fseq, t_elem)
         # truly T-armless: fails the span check and does not fold.
         tseqs, tss = load_sto("aln_Tarmless_qutrna.sto")
-        te = sprinx.get_stem_loop_elements(tss)[-1]
-        assert not any(sprinx.arm_span_has_enough_sequence(a, te) for a in tseqs.values())
+        te = common.get_stem_loop_elements(tss)[-1]
+        assert not any(mito.arm_span_has_enough_sequence(a, te) for a in tseqs.values())
         for name, a in tseqs.items():
-            fs, _ = sprinx.finalize_structure({"aligned_seq": a, "ss_cons": tss})
-            assert not sprinx.arm_is_threading_failure(a, fs, te), name
+            fs, _ = common.finalize_structure({"aligned_seq": a, "ss_cons": tss})
+            assert not mito.arm_is_threading_failure(a, fs, te), name
 
     def test_patch_recovers_pairs_balanced(self):
         seqs, _, elems = self._val()
         val_seq = load_fa("canonical.fa")[next(k for k in load_fa("canonical.fa") if "Val|UAC|Homo" in k)]
         aln = self._synthetic_val_aln(seqs, elems)
-        patched = sprinx.patch_threading_failure_arm("probe", aln, val_seq, self.CANONICAL_SS, elems[-1])
+        patched = mito.patch_threading_failure_arm("probe", aln, val_seq, self.CANONICAL_SS, elems[-1])
         assert patched.count("(") > self.CANONICAL_SS.count("(")
         assert patched.count("(") == patched.count(")")
 
@@ -466,7 +466,7 @@ class TestArmSpanAndPatch:
         ss_list = list(self.CANONICAL_SS)
         ss_list[46], ss_list[57] = "(", ")"
         conflicting = "".join(ss_list)
-        patched = sprinx.patch_threading_failure_arm("probe", aln, val_seq, conflicting, elems[-1])
+        patched = mito.patch_threading_failure_arm("probe", aln, val_seq, conflicting, elems[-1])
         assert patched != conflicting
         assert patched.count("(") == patched.count(")")
         assert patched.count("(") > conflicting.count("(")
@@ -480,8 +480,8 @@ def test_cm_filename_indexing(tmp_path):
     for fn in ("armless_trnT_wo_t.cm", "armless_trnL1_wo_d.cm",
                "Metazoa_A.cm", "OtherClade_A.cm", "notacm.txt"):
         (tmp_path / fn).write_text("dummy")
-    assert set(sprinx.index_armless_cms(str(tmp_path))) == {("T", "t"), ("L1", "d")}
-    canonical = sprinx.index_canonical_cms(str(tmp_path))
+    assert set(mito.index_armless_cms(str(tmp_path))) == {("T", "t"), ("L1", "d")}
+    canonical = mito.index_canonical_cms(str(tmp_path))
     # armless CMs excluded; duplicate aa 'A' keeps exactly one deterministically.
     assert set(canonical) == {"A"}
     assert canonical["A"] in (str(tmp_path / "Metazoa_A.cm"), str(tmp_path / "OtherClade_A.cm"))
@@ -497,7 +497,7 @@ def test_aa_field_to_cm_code():
                 # to disambiguate by anticodon instead of failing here.
                 "Leu": "L", "Ser": "S"}
     for aa, code in expected.items():
-        assert sprinx.aa_field_to_cm_code(aa, keys) == code, aa
+        assert common.aa_field_to_cm_code(aa, keys) == code, aa
 
 
 if __name__ == "__main__":
