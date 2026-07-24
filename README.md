@@ -137,14 +137,26 @@ and the examples above use; see "Layout" below.
 
 ### Why not just pick the best-scoring model?
 
-Because the score isn't comparable across models of different sizes. A
-stripped-down armless model has fewer columns than a full canonical one, so
-it scores canonical sequences better for reasons that have nothing to do with
-biology, and normalizing by length doesn't fix this either, since an armless
-model keeps the highest-information columns (the acceptor and anticodon
-stems), which inflates its per-column score too. Picking a model by score or
-E-value across models this different amounts to comparing numbers that were
-never meant to be compared. sprinx instead tries one canonical model at a
+This was tried directly: `cmpress` all canonical and armless CMs into one
+database, `cmscan` every sequence against it, and take the best E-value hit.
+Real runs on Ascaris and Habronattus mt-tRNAs show wrong-isotype models
+outscoring the correct one. For the Ascaris Asn tRNA (mtdbD00031155), the top
+two cmscan hits by E-value are `armless_trnP_wo_t` (Pro, E=0.00028) and
+`H.seed25-1` (His, canonical, E=0.00031) - neither is an Asn model, and the
+true Asn model doesn't place in the top two at all.
+
+The reason is structural: an armless model has fewer
+columns than a full canonical one (no D-arm or T-arm columns to score), so it
+scores short, degenerate mt-tRNA sequences confidently for reasons that have
+nothing to do with isotype match - fewer columns means fewer chances for a
+real sequence to mismatch. E-value accounts for database size, not for how
+much of a tRNA's structure a given model even attempts to score, so it
+doesn't make a ~40-column armless model and a ~70-column canonical model
+comparable. Picking a model by score or E-value across models built this
+differently amounts to comparing numbers that were never meant to be
+compared.
+
+sprinx instead tries one canonical model at a
 time and only moves on when that model's alignment doesn't actually anchor
 the anticodon. The full mechanism, including how a missing arm is told apart
 from a misaligned one, is in the module docstring at the top of
