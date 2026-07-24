@@ -108,7 +108,7 @@ def val_real_alignment():
 def test_val_threading_failure_real_alignment(val_real_alignment):
     """the case the unit proxy could not catch: on the real single-seq span, Val's
     T-arm must be diagnosed T_OR_VAR_ARM_MISSING, pass the span check (threading
-    failure, not genuine loss), and patch to a balanced same-length structure."""
+    failure, not real loss), and patch to a balanced same-length structure."""
     val_key, _seq, aln = val_real_alignment
     assert aln is not None
     elems = sprinx.get_stem_loop_elements(aln["ss_cons"])
@@ -293,7 +293,7 @@ def test_tier_prefers_fuller_anticodon_stem_thread_over_first_anchor():
     """S. pombe mt-Cys anchors cleanly against TRNAinf-bact.cm, but that CM
     only threads 3 of the anticodon stem's 5 canonical pairs; Metazoa_C.cm
     threads all 5 for the identical sequence. a short thread doesn't
-    disqualify a tier outright (a real anticodon stem can genuinely be
+    disqualify a tier outright (a real anticodon stem can be
     shorter than 5bp), but a later tier that reaches the full canonical
     count wins over one that doesn't, since accepting the short thread would
     otherwise shift the anticodon (verified via the no-unlabeled /

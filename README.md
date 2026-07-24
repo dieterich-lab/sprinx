@@ -9,13 +9,40 @@ not been tested on cytosolic or bacterial tRNAs.
 
 Give sprinx a FASTA of mt-tRNA sequences (see "Header format" below for the
 header conventions it understands) and it aligns each one to a covariance
-model, works out whether an arm (D, T, or both) is genuinely missing or the
+model, works out whether an arm (D, T, or both) is missing or the
 alignment just went wrong in that region, and reroutes truly armless
 sequences to a matching armless model (Ozerova et al. 2024). It then assigns
 a Sprinzl position to every nucleotide. The output is a per-nucleotide TSV:
 Sprinzl position, structural region, which model was used, whether the
 sequence was rerouted, and the arm-loss call. An optional standalone script
 renders the result as an R2DT 2D structure plot.
+
+## How it works
+
+1. `cmalign` each sequence against every canonical CM tier
+   (`--notrunc --nonbanded -g`). 
+   Default: bacterial CM (endosymbiosis), then clade-specific CMs
+   Keep the tier that anchors the anticodon and
+   accounts for the most total base-paired columns across all stems (ties go
+   to the earlier tier).
+2. Locate the anticodon by position: the D-arm always precedes it, any
+   variable arm and the T-arm always follow it. If it turns up in the first
+   stem-loop instead of the second, the D-arm didn't occupy its own slot -
+   D-arm missing.
+3. Otherwise, check each stem: absent if it has fewer than 3 non-gap column
+   pairs, or fewer than 2 of those are real WC/wobble pairs. This flags the
+   D-arm, the T-arm, both, or neither.
+4. For any arm flagged absent (other than a D-arm caught by step 2): does
+   that span have enough sequence to physically close a hairpin (stem length
+   + 3 nt)? If not, that's an arm loss. If so, fold just that span with
+   RNAfold: a fold means cmalign mis-threaded the arm (patch it in place
+   with the fold); no fold means arm loss after all.
+5. Real arm loss: reroute to the matching armless CM (Ozerova et al.
+   2024), isoacceptor ties broken by anticodon. Otherwise: assign Sprinzl
+   labels on the alignment already in hand.
+
+Exact thresholds and function names for each step are in the module
+docstring at the top of [src/sprinx/label.py](src/sprinx/label.py).
 
 ## Installation
 
@@ -99,9 +126,13 @@ and the examples above use; see "Layout" below.
 - The order canonical CMs are tried in (e.g. bacterial whole-family, then
   metazoan per-AA, then armless rerouting) is a heuristic. It hasn't been
   tested outside metazoan mitochondrial sequences.
-- The check that tells a genuine arm loss apart from a bad alignment works
+- The check that tells arm loss apart from a bad alignment works
   well for arm spans of roughly 13-20 nt; it hasn't been validated at the
   edges of that range.
+- When exactly 3 stem-loops are found, the 2nd is always assumed to be the
+  anticodon arm and the 3rd the T-arm. There's no way to instead read the
+  3rd as a variable arm with the T-arm actually missing; that case isn't
+  distinguished from an ordinary D-C-T cloverleaf with no variable arm.
 - No support for cytosolic, bacterial, or archaeal tRNAs.
 
 ### Why not just pick the best-scoring model?
@@ -168,7 +199,7 @@ Every processed sequence gets exactly one of these:
 - `T_OR_VAR_ARM_MISSING_slots=[n,..]`: one or more arm slots look empty
   (0-indexed, 5'->3'). A middle slot usually means an optional variable arm,
   not something sprinx reroutes for. The last slot is the T-arm: either
-  genuinely missing, or patched via RNAfold if the alignment just misplaced
+  truly missing, or patched via RNAfold if the alignment just misplaced
   it.
 - `UPSTREAM_ARM_MISSING_offset=n`: the D-arm looks missing, caught by the
   anticodon landing further along the model than expected.

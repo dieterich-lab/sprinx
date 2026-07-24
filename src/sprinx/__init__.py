@@ -2,9 +2,9 @@
 sprinx: Sprinzl-coordinate annotation for mitochondrial tRNAs.
 
 assigns Sprinzl positions to mt-tRNA sequences by aligning each to a canonical
-covariance model (cmalign), diagnosing which arm (D, T, or both) is genuinely
+covariance model (cmalign), diagnosing which arm (D, T, or both) is truly
 missing versus a CM threading failure via structural evidence rather than
-alignment score, and rerouting genuinely armless sequences to the matching
+alignment score, and rerouting truly armless sequences to the matching
 armless CM (Ozerova et al. 2024) before numbering positions.
 
 core logic: sprinx.label. CLI entry point: sprinx.cli:main (console script

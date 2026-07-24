@@ -257,7 +257,7 @@ def test_c_stem3_labels_not_overwritten_by_var_loop():
 
 
 def test_variable_arm_stem_gets_e_series_labels():
-    """real class-ii case (S. cerevisiae mt-Tyr): a genuine nested variable-
+    """real class-ii case (S. cerevisiae mt-Tyr): a real nested variable-
     arm stem-loop between the c-arm and t-arm gets the Sprinzl e-series
     reserved for it (e11-e17 stem/e1-e5 loop/e21-e27 stem, paired e1N<->e2N),
     and every e-labelled base is complementary to its declared pairing
@@ -436,7 +436,7 @@ class TestArmSpanAndPatch:
         assert all(sprinx.arm_span_has_enough_sequence(a, t_elem) for a in seqs.values())
         fseq, _ = sprinx.finalize_structure({"aligned_seq": seqs[val], "ss_cons": ss})
         assert sprinx.arm_is_threading_failure(seqs[val], fseq, t_elem)
-        # genuinely T-armless: fails the span check and does not fold.
+        # truly T-armless: fails the span check and does not fold.
         tseqs, tss = load_sto("aln_Tarmless_qutrna.sto")
         te = sprinx.get_stem_loop_elements(tss)[-1]
         assert not any(sprinx.arm_span_has_enough_sequence(a, te) for a in tseqs.values())
