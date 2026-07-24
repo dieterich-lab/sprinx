@@ -235,14 +235,22 @@ recipe/
 conftest.py                  pytest setup, loads .env / SPRINX_* vars for integration tests
 env.example                  template for .env
 data/                        example FASTA, canonical CM, armless CM library
+  README.md                    data curation notes: evidence-tier definitions used in
+                                curation_metadata.tsv
+  curation_metadata.tsv        per-sequence literature evidence for each armless/doubly-armless
+                                fixture entry (species, category, evidence tier, source DOI, notes)
   canonical.fa                 36 real cloverleaf mt-tRNAs (human, mouse, S. cerevisiae,
                                 S. pombe), ground truth for "no arm-loss call should fire"
-  D_armless.fa                 3 real D-armless mt-tRNAs, ground truth for missing_arm="d"
-  T_armless.fa                 17 real T-armless mt-tRNAs, ground truth for missing_arm="t"
-  both_armless_R_culicivorax_mt-tRNA-Ile.fa  1 real doubly-armless mt-tRNA (R. culicivorax),
-                                ground truth for missing_arm="d_and_t"
-  all.fa                       concatenation of the four files above (57 sequences),
-                                for exercising every arm-loss shape in one run
+  D_armless.fa                 4 real D-armless mt-tRNAs, ground truth for missing_arm="d";
+                                curated with literature evidence, see curation_metadata.tsv
+  T_armless.fa                 4 real T-armless mt-tRNAs (Ascaris suum), ground truth for
+                                missing_arm="t"; curated with literature evidence, see
+                                curation_metadata.tsv
+  both_armless.fa             3 real doubly-armless mt-tRNAs (R. culicivorax), ground truth
+                                for missing_arm="d_and_t"; curated with literature evidence,
+                                see curation_metadata.tsv
+  spombe_mt.no_linker.fa     25 S. pombe mt-tRNAs (linker sequence trimmed), used as a
+                                source of real sequences in integration tests
   TRNAinf-euk.cm                eukaryotic whole-family canonical CM (QutRNA2)
   mitofinder_models/           symlink to canonical CMs from MitoFinder, old INFERNAL-1 [1.0] format;
                                 cmalign (Infernal 1.1.x) refuses these outright
@@ -255,6 +263,9 @@ data/                        example FASTA, canonical CM, armless CM library
                                 cmconvert -a "$f" > "data/full_tRNAs_mitofinder_tRNAScanSE/$(basename "$f")"; done`
   truncated_cm/                armless CM library, `armless_trn{AA}_wo_{d,t,d_and_t}.cm`
                                 (Ozerova et al. 2024), used for --armless-cm-dir
+  combined.cm*                 unused leftover from an earlier cmscan/combined-CM-database
+                                exploration (see "Why not just pick the best-scoring model?"
+                                above); not read by any current code path
 tests/
   test_sprinx_unit.py          unit tests, run anywhere
   test_sprinx_integration.py   runs real cmalign / RNAfold end to end

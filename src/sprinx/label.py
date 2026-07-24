@@ -109,7 +109,6 @@ import RNA
 from forgi.graph.bulge_graph import BulgeGraph
 from Bio.Data.IUPACData import protein_letters_3to1
 from loguru import logger
-from scipy.stats import binomtest
 
 warnings.filterwarnings("ignore")
 
@@ -547,10 +546,9 @@ def stem_complementarity(aligned_seq, ss, elem):
     """WC/wobble pairing check for one stem element. n_pairs: columns where both
     partners are simultaneously non-gap (0 pairs = structurally impossible for
     a stem to exist there, not a threshold call). n_compatible: of those, WC or
-    G-U wobble pairs. p_value: binomial test vs null rate len(WC_PAIRS)/16, not
-    thresholded (short D-arm stems often lack power even when real); callers
-    read per_stem_complementarity directly instead of a binary verdict.
-    raw WUSS in ss is handled transparently by db_from_WUSS."""
+    G-U wobble pairs; callers read per_stem_complementarity directly rather
+    than a binary verdict. raw WUSS in ss is handled transparently by
+    db_from_WUSS."""
     db = RNA.db_from_WUSS(ss)
     pt = RNA.ptable(db)
     pairs = []
@@ -562,8 +560,7 @@ def stem_complementarity(aligned_seq, ss, elem):
                 pairs.append((a, b))
     n = len(pairs)
     k = sum((a, b) in WC_PAIRS for a, b in pairs)
-    p = binomtest(k, n, p=len(WC_PAIRS) / 16, alternative="greater").pvalue if n > 0 else None
-    return {"n_pairs": n, "n_compatible": k, "p_value": p}
+    return {"n_pairs": n, "n_compatible": k}
 
 
 def classify_arm_loss(header, aligned_seq, ss_cons,
@@ -589,7 +586,15 @@ def classify_arm_loss(header, aligned_seq, ss_cons,
     }
 
     def absent(i):
-        return per_stem[i]["n_pairs"] < MIN_STEM_PAIRS
+        """a stem counts as present only if both hold: (1) enough non-gap
+        sequence occupies its columns at all (n_pairs >= MIN_STEM_PAIRS), and
+        (2) enough of that sequence is actually WC/wobble-paired
+        (n_compatible >= MIN_COMPATIBLE_PAIRS), not just coincidental residues
+        sitting in aligned columns. absent() is the negation of that AND, so
+        it's an OR of the two negated conditions: failing either one alone is
+        enough to call the arm absent."""
+        stem = per_stem[i]
+        return stem["n_pairs"] < MIN_STEM_PAIRS or stem["n_compatible"] < MIN_COMPATIBLE_PAIRS
 
     if idx is None:
         # anticodon didn't anchor (ambiguous AT-rich anticodon): fallback scan.
@@ -665,15 +670,11 @@ MIN_HAIRPIN_LOOP = 3
 # check before any reroute happens.
 MIN_STEM_PAIRS = 3
 
-# full canonical anticodon-stem length. NOT a hard minimum: a real anticodon
-# stem can genuinely thread as few as ~3 pairs, so a short count is never
-# grounds to reject a tier (that would misfire on real biology). used only as
-# a preference signal in select_cm_and_align: among tiers that anchor the
-# anticodon cleanly, keep checking for one that reaches this full count rather
-# than settling for the first anchor, since a poorly-fitting CM can mis-thread
-# even an always-present stem while still anchoring the anticodon itself.
-# confirmed on real data (mt-Cys): TRNAinf-bact.cm threads only 3 of 5 pairs;
-# Metazoa_C.cm threads all 5 for the identical sequence.
+# a single WC/wobble pair can't stack into a helix on its own.
+MIN_COMPATIBLE_PAIRS = 2
+
+# full canonical anticodon-stem length; a real stem can thread fewer pairs
+# than this, so it's descriptive, not a hard minimum.
 ANTICODON_STEM_PAIRS = 5
 
 
@@ -798,7 +799,15 @@ def _pick_by_anticodon_anchor(header, seq, anticodon, candidates):
     dict-key suffix. shared by resolve_armless_cm (Leu1/Leu2, Ser1/Ser2
     filenames) and _resolve_canonical_for_tier (same ambiguity, but from a
     bare GtRNAdb-style aa field with no isoacceptor digit at all). falls back
-    to the first candidate, logged, if none anchor or no anticodon is known."""
+    to the first candidate, logged, if none anchor or no anticodon is known.
+
+    when two isoacceptor CMs happen to model an identical anticodon-stem
+    shape, this can pick either one and the choice is arbitrary - checked
+    against a real Ascaris Leu2 sequence where both L1/L2 armless CMs
+    anchored the anticodon identically, and the "wrong" pick still produced
+    byte-identical final structure and Sprinzl labels. a surprising cm_used
+    value isn't itself proof of a labeling bug; confirm the actual output
+    differs before treating it as one."""
     if anticodon:
         for path in candidates:
             aln = cmalign_one(header, seq, path)
@@ -839,23 +848,16 @@ def _routing_result(final_alignment, cm_used, diagnosis, rerouted=False, threadi
 
 def select_cm_and_align(header, seq, canonical_cm_tiers, armless_cm_index):
     """top-level CM selection for one sequence.
-    1. try each canonical CM tier in order (e.g. bacterial whole-family CM
-       first, since mitochondria's endosymbiotic origin makes it a useful
-       prior, then a metazoan per-AA directory); never by score/E-value across
-       tiers (module docstring section 2). a clean anticodon anchor is
-       necessary but not sufficient: the anticodon stem's own length
-       (ANTICODON_STEM_PAIRS) is a structural invariant a poorly-fitting CM can
-       still mis-thread even when the anchor itself is clean (see mt-Cys:
-       TRNAinf-bact.cm threads 3/5, Metazoa_C.cm threads 5/5, identical
-       sequence), but a real anticodon stem can also genuinely be shorter than
-       5bp, so a short thread is never grounds to reject a tier outright.
-       instead: keep the anchored tier with the fullest thread seen among
-       tiers tried so far, stop as soon as one reaches the full canonical
-       count, and accept the best available if none do, preferring better
-       evidence when the tiers on offer actually provide it, never
-       disqualifying a real anchor. a tier that doesn't apply to this aa, or
-       whose cmalign fails, is skipped; if none anchor at all, fall back to
-       the first tier that aligned.
+    1. align against every canonical CM tier (e.g. bacterial whole-family CM,
+       then a metazoan per-AA directory); never by raw alignment score
+       (module docstring section 2). among tiers that anchor the anticodon,
+       pick the one with the highest total base-pairing evidence summed
+       across all stems (per_stem_complementarity's n_pairs); ties keep the
+       earlier tier (see mt-Cys: TRNAinf-bact.cm threads 3/5 anticodon pairs,
+       Metazoa_C.cm threads 5/5 for the identical sequence - the fuller
+       thread wins). skip tiers that don't apply to this aa, whose cmalign
+       fails, or that never anchor the anticodon; fall back to the first
+       tier that aligned at all if none ever anchor.
     2. no arm missing (or only variable arm): return the canonical alignment.
     3. D-arm (no register shift) or T-arm flagged absent: cross-check with
        arm_span_has_enough_sequence then arm_is_threading_failure before
@@ -872,7 +874,7 @@ def select_cm_and_align(header, seq, canonical_cm_tiers, armless_cm_index):
     if isinstance(canonical_cm_tiers, (str, dict)):
         canonical_cm_tiers = [canonical_cm_tiers]
 
-    canonical_alignment = canonical_cm = diagnosis = best_c_pairs = None
+    canonical_alignment = canonical_cm = diagnosis = best_total_pairs = None
     first_alignment = first_cm = first_diag = None  # ultimate fallback: no tier ever anchors
     for tier in canonical_cm_tiers:
         path = _resolve_canonical_for_tier(header, seq, tier)
@@ -881,7 +883,7 @@ def select_cm_and_align(header, seq, canonical_cm_tiers, armless_cm_index):
             continue
         aln = cmalign_one(header, seq, path)
         if aln is None:
-            logger.info(f"{header}: moving to next canonical CM tier: alignment failed")
+            logger.info(f"{header}: skipping a canonical CM tier: alignment failed")
             continue
         diag = classify_arm_loss(header, aln["aligned_seq"], aln["ss_cons"])
         if first_alignment is None:                    # ultimate fallback if nothing ever anchors
@@ -890,34 +892,16 @@ def select_cm_and_align(header, seq, canonical_cm_tiers, armless_cm_index):
         if idx is None:
             logger.warning(
                 f"{header}: anticodon did not anchor cleanly against {path}, "
-                f"moving to next canonical CM tier\n"
+                f"evaluating remaining canonical CM tiers\n"
                 f"  aligned_seq={aln['aligned_seq']}\n"
                 f"  ss_cons={aln['ss_cons']}"
             )
             continue
 
-        # clean anchor is necessary but not sufficient: a CM that threads the
-        # anticodon stem short of its full canonical length (ANTICODON_STEM_PAIRS)
-        # may just be a poor fit for this sequence at that stem specifically (see
-        # mt-Cys: TRNAinf-bact.cm threads 3/5, Metazoa_C.cm threads 5/5 for the
-        # identical sequence), but a real, correctly-threaded anticodon stem can
-        # also genuinely be shorter than 5bp, so a short count is NOT grounds to
-        # reject a tier outright (that would misfire on real biology). instead:
-        # keep the anchored tier with the fullest thread seen so far, keep
-        # checking remaining tiers only while short of the canonical count, and
-        # stop as soon as one reaches it, never disqualifying an anchor, only
-        # preferring a fuller one when the tiers on offer actually provide one.
-        n_pairs = diag["per_stem_complementarity"][idx]["n_pairs"]
-        if canonical_alignment is None or n_pairs > best_c_pairs:
-            canonical_alignment, canonical_cm, diagnosis, best_c_pairs = aln, path, diag, n_pairs
-        if n_pairs >= ANTICODON_STEM_PAIRS:
-            break
-        logger.warning(
-            f"{header}: anticodon anchored against {path} but its own stem threaded only "
-            f"{n_pairs}/{ANTICODON_STEM_PAIRS} pairs, checking remaining tiers for a fuller thread\n"
-            f"  aligned_seq={aln['aligned_seq']}\n"
-            f"  ss_cons={aln['ss_cons']}"
-        )
+        total_pairs = sum(stem["n_pairs"] for stem in diag["per_stem_complementarity"])
+        logger.debug(f"{header}: tier {path} anchors anticodon, total stem pairs={total_pairs}")
+        if canonical_alignment is None or total_pairs > best_total_pairs:
+            canonical_alignment, canonical_cm, diagnosis, best_total_pairs = aln, path, diag, total_pairs
 
     if canonical_alignment is None:
         canonical_alignment, canonical_cm, diagnosis = first_alignment, first_cm, first_diag
@@ -1397,7 +1381,7 @@ def process_one_record(args):
                  f"offset={diagnosis.get('register_offset')})")
     for i, stem in enumerate(diagnosis.get("per_stem_complementarity", [])):
         logger.debug(f"    stem[{i}]: n_pairs={stem['n_pairs']} "
-                     f"n_compatible={stem['n_compatible']} p={stem['p_value']}")
+                     f"n_compatible={stem['n_compatible']}")
     if routing.get("threading_failure_elem"):
         logger.debug(f"  threading failure: patched via RNAfold; ss: {final_ss}")
     if routing["rerouted"]:

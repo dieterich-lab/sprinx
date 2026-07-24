@@ -39,7 +39,7 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 BACT_CM = os.path.join(DATA_DIR, "full_tRNAs_mitofinder_tRNAScanSE", "TRNAinf-bact.cm")
 METAZOA_Y_CM = os.path.join(DATA_DIR, "full_tRNAs_mitofinder_tRNAScanSE", "Metazoa_Y.cm")
 TRUNCATED_CM_DIR = os.path.join(DATA_DIR, "truncated_cm")
-SPOMBE_MT_FA = os.path.join(DATA_DIR, "ref_spombe_mt.no_linker.fasta")
+SPOMBE_MT_FA = os.path.join(DATA_DIR, "spombe_mt.no_linker.fa")
 
 
 def _load_bundle_fa(key):
@@ -146,7 +146,7 @@ need_bact = pytest.mark.skipif(
 @need_bact
 def test_patch_overrides_weak_pre_existing_pair_real_data():
     """a real threading-failure span (S. pombe mt-Cys's D-arm under
-    TRNAinf-bact.cm, from data/ref_spombe_mt.no_linker.fasta) can thread so
+    TRNAinf-bact.cm, from data/spombe_mt.no_linker.fa) can thread so
     weakly that only one pair survives (below MIN_STEM_PAIRS). RNAfold's fold
     of the same span agrees with that pair and extends it to a full 3bp
     D-stem: the patch applies over the pre-existing single pair rather than
@@ -255,6 +255,31 @@ def test_doubly_armless_routes_to_d_and_t_cm():
 need_tiered = pytest.mark.skipif(
     not (CMALIGN_OK and os.path.exists(METAZOA_Y_CM) and os.path.exists(BACT_CM)),
     reason="requires: cmalign, Metazoa_Y.cm, TRNAinf-bact.cm")
+
+
+@need_tiered
+@need_armless
+def test_doubly_armless_d_arm_with_zero_compatible_pairs_is_absent():
+    """R. culicivorax mt-Ile's D-arm, aligned against TRNAinf-bact.cm, has 3
+    non-gap column pairs but none of them are WC/wobble pairs: coincidental
+    residues sitting opposite each other, not a real stem. absent() catches
+    this via MIN_COMPATIBLE_PAIRS even though the raw pair count alone clears
+    MIN_STEM_PAIRS, so the sequence reroutes to the d_and_t armless CM rather
+    than t-only."""
+    tier_dir = os.path.join(DATA_DIR, "full_tRNAs_mitofinder_tRNAScanSE")
+    fasta = os.path.join(DATA_DIR, "both_armless.fa")
+    header = "NC_008640.1:3214-3260|Ile|GAU|Romanomermis_culicivorax"
+    seq = _load_fasta_file(fasta)[header]
+    armless = sprinx.index_armless_cms(ARMLESS_CM_DIR)
+
+    routing = sprinx.select_cm_and_align(
+        header, seq, [BACT_CM, sprinx.index_canonical_cms(tier_dir)], armless)
+    diag = routing["diagnosis"]
+    d_arm = diag["per_stem_complementarity"][0]
+    assert d_arm["n_pairs"] >= sprinx.MIN_STEM_PAIRS
+    assert d_arm["n_compatible"] == 0
+    assert diag["missing_arm"] == "d_and_t"
+    assert routing["rerouted"] and "wo_d_and_t" in os.path.basename(routing["cm_used"])
 
 
 need_bact_and_metazoa_c = pytest.mark.skipif(

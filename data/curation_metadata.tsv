@@ -1,7 +1,6 @@
 seq_id	species	aa	anticodon	category	evidence_tier	source_doi	notes
 mtdbD00038055|Ser1|GCU|Mus_musculus	Mus musculus	Ser1	GCU	D_armless	3	10.1017/S1355838200001047	genomic inference; D-arm absence universal across 31 mammalian mt genomes per Helm et al. 2000; no RNA-level evidence for Mus specifically
 mtdbD00063515|Ser1|GCU|Homo_sapiens	Homo sapiens	Ser1	GCU	D_armless	3	10.1017/S1355838200001047	genomic inference; D-arm absence universal across 31 mammalian mt genomes per Helm et al. 2000; no RNA-level evidence for Homo specifically
-mtdbD00031154|Ser2|UGA|Ascaris_suum	Ascaris suum	Ser2	UGA	D_armless	3	10.1093/genetics/130.2.471	genomic inference; D-arm absence from inability to fold into D-stem Okimoto 1992; no RNA-level evidence
 mtdbD00000917|Ser1|GCU|Bos_taurus	Bos taurus	Ser1	GCU	D_armless	1	10.3389/fgene.2014.00109	large-scale physical isolation Ueda et al. 1985 J Biochem 98:1275; D-arm absence confirmed by NMR and chemical/enzymatic probing Hayashi et al. 1997
 mtdbD00037746|Cys|GCA|Sphenodon_punctatus	Sphenodon punctatus	Cys	GCA	D_armless	3	10.1093/oxfordjournals.molbev.a040108	7-nt D-arm replacement loop; arm absence inferred from genomic sequence and putative secondary structure (Seutin 1994 fig. 4); no RNA-level evidence
 mtdbD00031166|Pro|UGG|6239|Caenorhabditis_elegans	Caenorhabditis elegans	Pro	UGG	T_armless	2	10.1093/genetics/130.2.471	genomic arm absence unambiguous; transcription Northern-blot confirmed Okimoto & Wolstenholme 1990 EMBO J 9:3405; no mature transcript sequencing
