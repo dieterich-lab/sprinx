@@ -21,7 +21,7 @@ sprinx.label: Sprinzl-coordinate annotation logic for mt-tRNAs.
       CM, then a metazoan per-AA directory); the first tier whose anticodon anchors
       unambiguously and threads its own stem to the full canonical 5bp wins.
       a short thread never disqualifies a tier outright, since a real anticodon
-      stem can genuinely be shorter than 5bp, so the best-threaded anchored tier
+      stem can be shorter than 5bp, so the best-threaded anchored tier
       is kept and used if no later tier does better. never by score/E-value
       (see (2)): a CM built for the wrong clade can fail to thread a divergent
       sequence at all, or mis-thread the otherwise-invariant anticodon stem
@@ -34,7 +34,7 @@ sprinx.label: Sprinzl-coordinate annotation logic for mt-tRNAs.
       partners simultaneously non-gap. no column can form a pair, so no stem can
       exist there: geometry forces the call, with no threshold to tune.
       n_pairs==0 has two distinct causes that require different responses:
-        (i)  genuine arm loss: the sequence simply has no arm. the element span
+        (i)  arm loss: the sequence simply has no arm. the element span
              across the alignment is mostly or entirely gap characters.
         (ii) CM threading failure: the arm exists but cmalign placed its sequence
              into unmodeled insert columns because the arm is too divergent from
@@ -44,7 +44,7 @@ sprinx.label: Sprinzl-coordinate annotation logic for mt-tRNAs.
       element span (stem + loop model columns + intervening insert characters).
       if the count is < n_stem_cols + MIN_HAIRPIN_LOOP (=3, steric minimum for
       the RNA backbone to close a hairpin), no hairpin can form physically:
-      genuine arm loss (i). otherwise: threading failure (ii).
+      arm loss (i). otherwise: threading failure (ii).
       hybrid Infernal + RNAfold design: for threading failures, Infernal's
       canonical CM is correct for all arms it DID thread properly; only the
       mis-threaded arm needs structural recovery. RNAfold MFE on the short arm
@@ -54,7 +54,7 @@ sprinx.label: Sprinzl-coordinate annotation logic for mt-tRNAs.
       misroute to an armless CM; (b) relying on RNAfold alone for full-sequence
       mt-tRNA folding is unreliable due to tertiary interactions and base
       modifications not captured by 2D MFE.
-   d. if genuinely absent, reroute to armless CM (Ozerova et al. 2024).
+   d. if truly absent, reroute to armless CM (Ozerova et al. 2024).
       isoacceptors (Leu1/Leu2, Ser1/Ser2) disambiguated by
       anticodon, not filename suffix. for doubly-armless (D + T both missing),
       routes to the d_and_t CM.
@@ -81,7 +81,7 @@ sprinx.label: Sprinzl-coordinate annotation logic for mt-tRNAs.
    armless CM filenames: armless_trn{AA}_wo_{arm}.cm where arm is d, t, or d_and_t
    for doubly-armless (Ozerova et al. 2024). armless CM rerouting
    is unaffected by which canonical CM tier won above; it only triggers once
-   a genuine arm-loss diagnosis is made from whichever tier's alignment was used.
+   an arm-loss diagnosis is made from whichever tier's alignment was used.
    each --canonical-cm source is a directory of {label}_{AA}.cm files (e.g.
    Metazoan_P.cm; label/clade is ignored, selection is by AA only, per-sequence,
    same as armless CM selection) or a single CM file (applies to every aa,
@@ -109,7 +109,6 @@ import RNA
 from forgi.graph.bulge_graph import BulgeGraph
 from Bio.Data.IUPACData import protein_letters_3to1
 from loguru import logger
-from scipy.stats import binomtest
 
 warnings.filterwarnings("ignore")
 
@@ -393,7 +392,7 @@ def finalize_structure(alignment):
     """gapped cmalign alignment -> (ungapped_seq, ungapped_dotbracket) for Sprinzl
     numbering. strips gap symbols ('-' deletion, '.' insert gap); converts WUSS
     to dot-bracket. ss_cons's pair can have one side gapped in THIS sequence
-    (e.g. genuine arm loss); nulling only that side and stripping would let
+    (e.g. arm loss); nulling only that side and stripping would let
     naive re-matching silently re-pair the orphan with an unrelated stem
     (observed corrupting the acceptor stem). fix: read pairing from the full
     consensus db via RNA.ptable before stripping, and null BOTH sides of any
@@ -426,26 +425,32 @@ def finalize_structure(alignment):
 # offset==0 with n_pairs==0 at both D-arm and T-arm slots simultaneously.
 
 def _forgi_stem_groups(ss):
-    """all physical stems via forgi BulgeGraph, merging pieces a single interior-
-    loop bulge splits apart (forgi has no notion of "one bulged helix" vs "two
-    helices", so that merging has to happen here).
-    an interior-loop (forgi 'i') edge connects exactly two stems, and its graph
-    shape is the same whether it is a real bulge inside one helix (merge) or a
-    junction between two distinct helices (don't merge). the junction case only
-    arises when a multi-branch loop degenerates to two stems (an armless CM
-    leaving just the acceptor + C-stem, doubly-armless, or C-stem + T-stem); a
-    full cloverleaf joins its arms through a multiloop ('m'), never 'i', so its
-    arms never get merged. the tell is how many arm/acceptor "anchors" a merged
-    group holds: each hairpin is one arm, and the outermost stem (lowest start
-    column = acceptor) counts as one more anchor when the group also holds a
-    hairpin. more than one anchor means the group spans a real junction, so keep
-    the stems separate; one or none is a single-helix bulge (acceptor-internal
-    or arm-internal), so merge. TestForgiStemGroups covers the four classes.
-    each dict: {'stem5_cols', 'stem3_cols', 'stem_cols' (both sides), 'loop_cols'
-    (hairpin loop, or [] for the acceptor / any hairpin-less stem), 'span'},
-    0-indexed, sorted by span start. shared by get_stem_loop_elements (arm-loss
-    diagnosis) and parse_topology (Sprinzl labeling) so both see the same
-    physical stems instead of two stem parsers drifting apart."""
+    """All physical stems via forgi's BulgeGraph.
+
+    Why merging is needed: forgi splits one stem into two pieces wherever an
+    interior-loop bulge interrupts it. Those pieces are merged back together
+    here.
+
+    How merge-vs-keep-separate is decided:
+    - an interior-loop ('i') edge connects two stems whether it's a bulge
+      inside one real helix, or a junction between two separate arms.
+    - forgi's graph shape looks the same either way, so we count "anchors"
+      instead: each hairpin is one anchor, plus the acceptor stem counts as
+      one more anchor if the group also holds a hairpin.
+    - more than one anchor: a real junction. keep the stems separate.
+    - one or zero anchors: a bulge inside a single helix. merge.
+    - the junction case only happens in armless/doubly-armless alignments,
+      where two arms end up directly adjacent. a full cloverleaf's arms
+      always join through a multiloop ('m'), never 'i', so they never merge.
+    - see TestForgiStemGroups for the four cases this covers.
+
+    Returns: list of dicts, sorted by span start, each with:
+    - stem5_cols, stem3_cols, stem_cols (both sides)
+    - loop_cols (empty for the acceptor stem - it has no hairpin loop)
+    - span
+
+    Shared by get_stem_loop_elements (arm-loss diagnosis) and parse_topology
+    (Sprinzl labeling), so both use the same physical stems."""
     db = RNA.db_from_WUSS(ss)
     bg = BulgeGraph.from_dotbracket(db)
     stem_elems = sorted([e for e in bg.defines if e.startswith("s")],
@@ -547,10 +552,9 @@ def stem_complementarity(aligned_seq, ss, elem):
     """WC/wobble pairing check for one stem element. n_pairs: columns where both
     partners are simultaneously non-gap (0 pairs = structurally impossible for
     a stem to exist there, not a threshold call). n_compatible: of those, WC or
-    G-U wobble pairs. p_value: binomial test vs null rate len(WC_PAIRS)/16, not
-    thresholded (short D-arm stems often lack power even when real); callers
-    read per_stem_complementarity directly instead of a binary verdict.
-    raw WUSS in ss is handled transparently by db_from_WUSS."""
+    G-U wobble pairs; callers read per_stem_complementarity directly rather
+    than a binary verdict. raw WUSS in ss is handled transparently by
+    db_from_WUSS."""
     db = RNA.db_from_WUSS(ss)
     pt = RNA.ptable(db)
     pairs = []
@@ -562,19 +566,22 @@ def stem_complementarity(aligned_seq, ss, elem):
                 pairs.append((a, b))
     n = len(pairs)
     k = sum((a, b) in WC_PAIRS for a, b in pairs)
-    p = binomtest(k, n, p=len(WC_PAIRS) / 16, alternative="greater").pvalue if n > 0 else None
-    return {"n_pairs": n, "n_compatible": k, "p_value": p}
+    return {"n_pairs": n, "n_compatible": k}
 
 
 def classify_arm_loss(header, aligned_seq, ss_cons,
                       expected_anticodon_index=EXPECTED_ANTICODON_STEM_INDEX):
-    """top-level structural diagnosis for one cmalign'd sequence: which arm is
-    missing, measured via register shift (D-arm, when it occurs) or per-slot
-    absent() (D-arm when no shift occurs, T-arm always, via MIN_STEM_PAIRS;
-    see its docstring for why this is a soft signal). always returns full
-    diagnostics for every stem, even on ambiguous input. see TestCanonical36,
-    TestTArmless, TestDArmless, TestBothArmlessMature for end-to-end
-    validation against real alignments."""
+    """Top-level structural diagnosis for one cmalign'd sequence: which arm is
+    missing.
+
+    - D-arm, when a register shift occurs: measured via the shift itself.
+    - D-arm (no shift) or T-arm: measured via per-slot absent() (see its
+      docstring).
+
+    Always returns full diagnostics for every stem, even on ambiguous input.
+
+    See TestCanonical36, TestTArmless, TestDArmless, TestBothArmlessMature
+    for end-to-end validation against real alignments."""
     anticodon = header_to_anticodon(header)
     elements = get_stem_loop_elements(ss_cons)
     n = len(elements)
@@ -589,7 +596,15 @@ def classify_arm_loss(header, aligned_seq, ss_cons,
     }
 
     def absent(i):
-        return per_stem[i]["n_pairs"] < MIN_STEM_PAIRS
+        """a stem counts as present only if both hold: (1) enough non-gap
+        sequence occupies its columns at all (n_pairs >= MIN_STEM_PAIRS), and
+        (2) enough of that sequence is actually WC/wobble-paired
+        (n_compatible >= MIN_COMPATIBLE_PAIRS), not just coincidental residues
+        sitting in aligned columns. absent() is the negation of that AND, so
+        it's an OR of the two negated conditions: failing either one alone is
+        enough to call the arm absent."""
+        stem = per_stem[i]
+        return stem["n_pairs"] < MIN_STEM_PAIRS or stem["n_compatible"] < MIN_COMPATIBLE_PAIRS
 
     if idx is None:
         # anticodon didn't anchor (ambiguous AT-rich anticodon): fallback scan.
@@ -665,15 +680,11 @@ MIN_HAIRPIN_LOOP = 3
 # check before any reroute happens.
 MIN_STEM_PAIRS = 3
 
-# full canonical anticodon-stem length. NOT a hard minimum: a real anticodon
-# stem can genuinely thread as few as ~3 pairs, so a short count is never
-# grounds to reject a tier (that would misfire on real biology). used only as
-# a preference signal in select_cm_and_align: among tiers that anchor the
-# anticodon cleanly, keep checking for one that reaches this full count rather
-# than settling for the first anchor, since a poorly-fitting CM can mis-thread
-# even an always-present stem while still anchoring the anticodon itself.
-# confirmed on real data (mt-Cys): TRNAinf-bact.cm threads only 3 of 5 pairs;
-# Metazoa_C.cm threads all 5 for the identical sequence.
+# a single WC/wobble pair can't stack into a helix on its own.
+MIN_COMPATIBLE_PAIRS = 2
+
+# full canonical anticodon-stem length; a real stem can thread fewer pairs
+# than this, so it's descriptive, not a hard minimum.
 ANTICODON_STEM_PAIRS = 5
 
 
@@ -681,7 +692,7 @@ def arm_span_has_enough_sequence(aligned_seq, elem):
     """first-stage (fast, hard) filter after a stem slot is flagged absent: does
     the span contain enough nucleotides to physically form a hairpin
     (n_stem_cols + MIN_HAIRPIN_LOOP, the steric minimum)? False here means
-    definite genuine loss. True is not proof of a real arm, just not ruled out by
+    definite real loss. True is not proof of a real arm, just not ruled out by
     volume alone; see arm_is_threading_failure for the required 2nd check."""
     start, end = elem["span"]
     n_nts = sum(1 for c in aligned_seq[start:end] if c not in "-.")
@@ -718,34 +729,34 @@ def arm_is_threading_failure(aligned_seq, final_seq, elem):
     """second-stage check, run only after arm_span_has_enough_sequence passes:
     does the span actually fold as a hairpin? needed because a CM with wide
     insert-state capacity can pass the raw-count check on unrelated leftover
-    sequence alone. True: real, recoverable arm. False: genuine loss despite
+    sequence alone. True: real, recoverable arm. False: real loss despite
     passing the count check."""
     _, arm_ss = _arm_full_span_subseq_and_fold(aligned_seq, final_seq, elem)
     return arm_ss is not None and "(" in arm_ss
 
 
 def patch_threading_failure_arm(header, aligned_seq, final_seq, final_ss, elem):
-    """recover arm structure for a confirmed CM threading failure (called only
-    after arm_is_threading_failure): splice elem's own RNAfold fold into
-    final_ss rather than refolding the whole molecule, since full-sequence RNAfold
-    on a mt-tRNA is unreliable (tertiary contacts, modified bases), but a short
-    isolated span (13-20nt) is fine.
-    the span is cleared before the fold is written in: cmalign's own structure
-    inside a flagged-as-failed span is exactly what's untrustworthy here (that's
-    why arm_is_threading_failure fired), so a stray weak bracket that survived
-    it (below MIN_STEM_PAIRS but still non-'.') must not be able to block the
-    very patch meant to replace it. observed on real data (mt-Cys under
-    TRNAinf-bact.cm), where a single leftover pair blocked a 3bp D-stem
-    RNAfold found that agreed with it and simply extended it. a bracket
-    OUTSIDE the span whose partner falls INSIDE it would dangle once the span
-    is cleared, so that partner is cleared too. both overrides are logged as
-    ONE consolidated warning (not one line per position, and not debug-only):
-    this is RNAfold overruling cmalign's own structural call, not merely
-    filling in a gap, and it can in principle reach outside the span this
-    function is actually meant to patch; header identifies which sequence,
-    since worker processes interleave in a multi-sequence run.
-    returns patched final_ss, or the original on no fold / unbalanced result
-    (safety net)."""
+    """Recover arm structure for a confirmed CM threading failure. Call only
+    after arm_is_threading_failure.
+
+    What it does: splices elem's own RNAfold fold into final_ss, rather than
+    refolding the whole molecule. Full-sequence RNAfold on a mt-tRNA is
+    unreliable (tertiary contacts, modified bases); a short isolated span
+    (13-20nt) is fine.
+
+    Why the span is cleared before the fold is written in: cmalign's
+    structure inside this span is untrustworthy (that's why
+    arm_is_threading_failure fired). A weak leftover bracket (below
+    MIN_STEM_PAIRS but not blank) must not block the patch meant to replace
+    it. Seen on real data: mt-Cys under TRNAinf-bact.cm had a single leftover
+    pair blocking a 3bp D-stem fold that agreed with it and would have simply
+    extended it.
+
+    A bracket outside the span whose partner falls inside it would dangle
+    once the span is cleared, so that partner is cleared too.
+
+    Returns: patched final_ss, or the original final_ss if there's no fold
+    or the result is unbalanced (safety net)."""
     ungapped_positions, arm_ss = _arm_full_span_subseq_and_fold(aligned_seq, final_seq, elem)
 
     if ungapped_positions is None or "(" not in arm_ss:
@@ -793,12 +804,23 @@ def patch_threading_failure_arm(header, aligned_seq, final_seq, final_ss, elem):
 
 def _pick_by_anticodon_anchor(header, seq, anticodon, candidates):
     """given >=2 CM paths that could all serve the same (ambiguous) aa code,
-    align to each and keep whichever anchors the header's anticodon in its own
-    anticodon loop; the anticodon is the discriminating fact, not filename or
-    dict-key suffix. shared by resolve_armless_cm (Leu1/Leu2, Ser1/Ser2
-    filenames) and _resolve_canonical_for_tier (same ambiguity, but from a
-    bare GtRNAdb-style aa field with no isoacceptor digit at all). falls back
-    to the first candidate, logged, if none anchor or no anticodon is known."""
+    align to each and keep whichever anchors the header's anticodon in its
+    own anticodon loop. the anticodon is the discriminating fact, not
+    filename or dict-key suffix.
+
+    - shared by resolve_armless_cm (Leu1/Leu2, Ser1/Ser2 filenames) and
+      _resolve_canonical_for_tier (same ambiguity, but from a bare
+      GtRNAdb-style aa field with no isoacceptor digit at all).
+    - falls back to the first candidate, logged, if none anchor or no
+      anticodon is known.
+
+    caveat: when two isoacceptor CMs model an identical anticodon-stem
+    shape, this can pick either one, and the choice is arbitrary. checked
+    against an Ascaris Leu2 sequence where both L1/L2 armless CMs
+    anchored the anticodon identically - the "wrong" pick still produced
+    byte-identical final structure and Sprinzl labels. a surprising cm_used
+    value isn't itself proof of a labeling bug; confirm the actual output
+    differs before treating it as one."""
     if anticodon:
         for path in candidates:
             aln = cmalign_one(header, seq, path)
@@ -838,41 +860,43 @@ def _routing_result(final_alignment, cm_used, diagnosis, rerouted=False, threadi
 
 
 def select_cm_and_align(header, seq, canonical_cm_tiers, armless_cm_index):
-    """top-level CM selection for one sequence.
-    1. try each canonical CM tier in order (e.g. bacterial whole-family CM
-       first, since mitochondria's endosymbiotic origin makes it a useful
-       prior, then a metazoan per-AA directory); never by score/E-value across
-       tiers (module docstring section 2). a clean anticodon anchor is
-       necessary but not sufficient: the anticodon stem's own length
-       (ANTICODON_STEM_PAIRS) is a structural invariant a poorly-fitting CM can
-       still mis-thread even when the anchor itself is clean (see mt-Cys:
-       TRNAinf-bact.cm threads 3/5, Metazoa_C.cm threads 5/5, identical
-       sequence), but a real anticodon stem can also genuinely be shorter than
-       5bp, so a short thread is never grounds to reject a tier outright.
-       instead: keep the anchored tier with the fullest thread seen among
-       tiers tried so far, stop as soon as one reaches the full canonical
-       count, and accept the best available if none do, preferring better
-       evidence when the tiers on offer actually provide it, never
-       disqualifying a real anchor. a tier that doesn't apply to this aa, or
-       whose cmalign fails, is skipped; if none anchor at all, fall back to
-       the first tier that aligned.
-    2. no arm missing (or only variable arm): return the canonical alignment.
-    3. D-arm (no register shift) or T-arm flagged absent: cross-check with
-       arm_span_has_enough_sequence then arm_is_threading_failure before
-       trusting it; passing both means patch via RNAfold instead of
-       rerouting. D-arm via register shift (offset>0) skips this and is
-       trusted directly, since its span holds sequence displaced by the shift
-       itself, not the D-arm's own (or absent) content, so both checks would
-       false-positive there.
-    4. genuine loss: reroute via resolve_armless_cm (anticodon-disambiguated);
-       no matching armless CM: warn and keep the canonical alignment.
+    """Top-level CM selection for one sequence.
+
+    1. Align against every canonical CM tier (e.g. bacterial whole-family CM,
+       then a metazoan per-AA directory). Never by raw alignment score
+       (module docstring section 2).
+       - Among tiers that anchor the anticodon, pick the one with the
+         highest total base-pairing evidence summed across all stems
+         (per_stem_complementarity's n_pairs). Ties keep the earlier tier.
+       - Example: mt-Cys, TRNAinf-bact.cm threads 3/5 anticodon pairs,
+         Metazoa_C.cm threads 5/5 for the identical sequence - the fuller
+         thread wins.
+       - Skip tiers that don't apply to this aa, whose cmalign fails, or
+         that never anchor the anticodon.
+       - If no tier ever anchors, fall back to the first tier that aligned
+         at all.
+    2. No arm missing (or only the variable arm): return the canonical
+       alignment as-is.
+    3. D-arm (no register shift) or T-arm flagged absent:
+       - Cross-check with arm_span_has_enough_sequence, then
+         arm_is_threading_failure, before trusting the flag.
+       - Passing both: patch via RNAfold instead of rerouting.
+       - D-arm via register shift (offset>0) skips this cross-check and is
+         trusted directly - its span holds sequence displaced by the shift
+         itself, not the D-arm's own (or absent) content, so both checks
+         would false-positive there.
+    4. Real loss: reroute via resolve_armless_cm (anticodon-disambiguated).
+       No matching armless CM: warn and keep the canonical alignment.
+
     canonical_cm_tiers: list of tiers (path, or {aa_code: path} dict), or a
-    bare path/dict wrapped as a single tier. returns dict: final_alignment,
-    cm_used, diagnosis, rerouted, threading_failure_elem."""
+    bare path/dict wrapped as a single tier.
+
+    Returns: dict with final_alignment, cm_used, diagnosis, rerouted,
+    threading_failure_elem."""
     if isinstance(canonical_cm_tiers, (str, dict)):
         canonical_cm_tiers = [canonical_cm_tiers]
 
-    canonical_alignment = canonical_cm = diagnosis = best_c_pairs = None
+    canonical_alignment = canonical_cm = diagnosis = best_total_pairs = None
     first_alignment = first_cm = first_diag = None  # ultimate fallback: no tier ever anchors
     for tier in canonical_cm_tiers:
         path = _resolve_canonical_for_tier(header, seq, tier)
@@ -881,7 +905,7 @@ def select_cm_and_align(header, seq, canonical_cm_tiers, armless_cm_index):
             continue
         aln = cmalign_one(header, seq, path)
         if aln is None:
-            logger.info(f"{header}: moving to next canonical CM tier: alignment failed")
+            logger.info(f"{header}: skipping a canonical CM tier: alignment failed")
             continue
         diag = classify_arm_loss(header, aln["aligned_seq"], aln["ss_cons"])
         if first_alignment is None:                    # ultimate fallback if nothing ever anchors
@@ -890,34 +914,16 @@ def select_cm_and_align(header, seq, canonical_cm_tiers, armless_cm_index):
         if idx is None:
             logger.warning(
                 f"{header}: anticodon did not anchor cleanly against {path}, "
-                f"moving to next canonical CM tier\n"
+                f"evaluating remaining canonical CM tiers\n"
                 f"  aligned_seq={aln['aligned_seq']}\n"
                 f"  ss_cons={aln['ss_cons']}"
             )
             continue
 
-        # clean anchor is necessary but not sufficient: a CM that threads the
-        # anticodon stem short of its full canonical length (ANTICODON_STEM_PAIRS)
-        # may just be a poor fit for this sequence at that stem specifically (see
-        # mt-Cys: TRNAinf-bact.cm threads 3/5, Metazoa_C.cm threads 5/5 for the
-        # identical sequence), but a real, correctly-threaded anticodon stem can
-        # also genuinely be shorter than 5bp, so a short count is NOT grounds to
-        # reject a tier outright (that would misfire on real biology). instead:
-        # keep the anchored tier with the fullest thread seen so far, keep
-        # checking remaining tiers only while short of the canonical count, and
-        # stop as soon as one reaches it, never disqualifying an anchor, only
-        # preferring a fuller one when the tiers on offer actually provide one.
-        n_pairs = diag["per_stem_complementarity"][idx]["n_pairs"]
-        if canonical_alignment is None or n_pairs > best_c_pairs:
-            canonical_alignment, canonical_cm, diagnosis, best_c_pairs = aln, path, diag, n_pairs
-        if n_pairs >= ANTICODON_STEM_PAIRS:
-            break
-        logger.warning(
-            f"{header}: anticodon anchored against {path} but its own stem threaded only "
-            f"{n_pairs}/{ANTICODON_STEM_PAIRS} pairs, checking remaining tiers for a fuller thread\n"
-            f"  aligned_seq={aln['aligned_seq']}\n"
-            f"  ss_cons={aln['ss_cons']}"
-        )
+        total_pairs = sum(stem["n_pairs"] for stem in diag["per_stem_complementarity"])
+        logger.debug(f"{header}: tier {path} anchors anticodon, total stem pairs={total_pairs}")
+        if canonical_alignment is None or total_pairs > best_total_pairs:
+            canonical_alignment, canonical_cm, diagnosis, best_total_pairs = aln, path, diag, total_pairs
 
     if canonical_alignment is None:
         canonical_alignment, canonical_cm, diagnosis = first_alignment, first_cm, first_diag
@@ -931,7 +937,7 @@ def select_cm_and_align(header, seq, canonical_cm_tiers, armless_cm_index):
 
     # step 3 (see docstring). D-arm via register shift is trusted directly: its
     # span contains non-D-arm sequence placed there by the shift itself, so
-    # both checks would false-positive on genuinely D-armless sequences.
+    # both checks would false-positive on truly D-armless sequences.
     # D-arm via no-shift (offset==0) doesn't have that problem and gets the
     # same cross-check as T-arm.
     if missing_arm in ("t", "d"):
@@ -957,14 +963,14 @@ def select_cm_and_align(header, seq, canonical_cm_tiers, armless_cm_index):
                 logger.info(
                     f"{header}: CM diagnosed {missing_arm}-arm missing against {canonical_cm} "
                     f"({diagnosis['call']}) but the span folds as a real hairpin "
-                    f"(CM threading failure, not genuine arm loss); patching via RNAfold\n"
+                    f"(CM threading failure, not real arm loss); patching via RNAfold\n"
                     f"  aligned_seq={canonical_alignment['aligned_seq']}\n"
                     f"  ss_cons={canonical_alignment['ss_cons']}"
                 )
                 return _routing_result(canonical_alignment, canonical_cm, diagnosis,
                                         threading_failure_elem=wide_elem)
 
-    # genuine arm loss: reroute
+    # arm loss: reroute
     logger.info(f"{header}: {missing_arm}-arm missing against {canonical_cm} "
                f"({diagnosis['call']}), looking for an armless CM to reroute to\n"
                f"  aligned_seq={canonical_alignment['aligned_seq']}\n"
@@ -990,12 +996,15 @@ def select_cm_and_align(header, seq, canonical_cm_tiers, armless_cm_index):
 # --- topology + Sprinzl assignment ---
 
 def parse_topology(ss):
-    """acceptor stem (the one stem with no hairpin loop of its own) + inner
-    stems, via _forgi_stem_groups, not a hand-rolled contiguous-bracket scan,
-    so a bulge or a finalize_structure-nulled pair inside a stem (e.g. the
-    acceptor's own 5' or 3' half) doesn't get split off as a phantom extra
-    stem and silently dropped from Sprinzl labeling. does not label D/C/T
-    yet; that needs the anticodon (see locate_anticodon_stem)."""
+    """Split the structure into the acceptor stem (the one stem with no
+    hairpin loop of its own) and the inner stems.
+
+    - Uses _forgi_stem_groups, which correctly keeps a bulge or a
+      finalize_structure-nulled pair inside a stem (e.g. the acceptor's own
+      5' or 3' half) as part of that same stem, rather than treating it as
+      a phantom extra stem.
+    - Does not label D/C/T yet - that needs the anticodon, see
+      locate_anticodon_stem."""
     groups = _forgi_stem_groups(ss)
     acceptor = next((g for g in groups if not g["loop_cols"]), None)
     if acceptor is None:
@@ -1009,32 +1018,40 @@ def parse_topology(ss):
     }
 
 
+# D always precedes C; any variable arm and T always follow C. So for a
+# fixed total stem-loop count (other than 2, which is ambiguous either way
+# depending on which arm is missing), the anticodon arm's position is fixed
+# by topology alone: 3 stems (D, C, T) -> C is the middle one; 4 stems
+# (D, C, variable arm, T) -> C is the second one.
+EXPECTED_ANTICODON_ARM_INDEX = {3: 1, 4: 1}
+
+
 def locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm=None):
-    """identify C-stem (anticodon arm) by anticodon content, D-stem = sibling
-    before C that does not enclose it, T-stem = sibling after it. inner_stems
-    is a list of _forgi_stem_groups dicts (stem5_cols/stem3_cols/loop_cols
-    already known from forgi, with no re-deriving them via pair_table here).
-    innermost-stem-first search order (smallest span first) prevents a
-    D-armless pseudostem (which structurally encloses C) from being matched
-    before the real C-stem. 'does not enclose' check: a pseudostem that opens
-    before C and closes after C must be excluded as D-arm candidate, since it IS
-    the enclosing pseudostem.
-    see TestSprinzlAssignment::test_d_armless_replacement_loop_gets_d_arm_labels.
-    when the anticodon substring happens to occur in more than one stem's loop
-    (observed on a real T-armless armless-CM alignment, two short remaining
-    loops, coincidental match in both), don't guess by span size; use
-    missing_arm, already established via the far more reliable register-offset
-    diagnosis on the canonical alignment (classify_arm_loss), to break the tie:
-    D always precedes C, so if the T-arm is the one missing here (only D and C
-    remain) the later candidate is C; if the D-arm is missing (only C and T
-    remain) the earlier one is C. this positional rule is only valid when
-    exactly TWO stems remain, so it is gated on len(inner_stems)==2, NOT on
-    missing_arm alone: a canonical 3-stem alignment kept as an RNAfold-patch
-    fallback still carries missing_arm=d/t from the canonical diagnosis (e.g.
-    human mt-Val), and applying a 2-stem positional shortcut to a 3-stem
-    structure would mislabel it. falls back to the smallest-span candidate
-    (previous behaviour) whenever the tie can't be safely broken this way."""
+    """Identify the C-stem (anticodon arm), D-stem (sibling before C that
+    does not enclose it), and T-stem (sibling after C).
+
+    - inner_stems: a list of _forgi_stem_groups dicts (stem5_cols,
+      stem3_cols, loop_cols already known from forgi).
+    - 'does not enclose' check: a D-armless pseudostem opens before C and
+      closes after C. It must be excluded as a D-arm candidate, since it IS
+      the enclosing pseudostem, not a D-arm at all. See
+      TestSprinzlAssignment::test_d_armless_replacement_loop_gets_d_arm_labels.
+
+    How the C-stem is found: by position (EXPECTED_ANTICODON_ARM_INDEX). The
+    anticodon sequence can coincidentally appear in more than one loop, so
+    position is the deciding fact, not loop content.
+    - The anticodon search still runs, but only as a sanity check: does the
+      position-derived C-stem's own loop actually contain it? A mismatch
+      means the alignment itself is broken, and raises rather than
+      mislabeling silently.
+    - Exactly 2 stems remaining is the one shape position alone can't
+      resolve (C sits first if D is the missing arm, second if T is). That
+      case needs missing_arm, already established via the register-offset
+      diagnosis on the canonical alignment (classify_arm_loss).
+    - Any other stem count, or 2 stems with missing_arm unknown, raises
+      rather than guessing."""
     inner_stems = topo["inner_stems"]
+    n_stems = len(inner_stems)
 
     def direct_loop(idx, group):
         # loop positions exclusive of any nested stem's span
@@ -1048,31 +1065,31 @@ def locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm=None):
     def unpaired(a, b):
         return [p for p in range(a, b) if ss[p] == "."]
 
+    def loop_contains_anticodon(idx):
+        return ac and ac in "".join(seq[p] for p in direct_loop(idx, inner_stems[idx]))
+
     ac = (anticodon or "").upper().replace("T", "U")
-    search_order = sorted(range(len(inner_stems)),
-                          key=lambda i: inner_stems[i]["span"][1] - inner_stems[i]["span"][0])
-    matches = [idx for idx in search_order
-               if ac and ac in "".join(seq[p] for p in direct_loop(idx, inner_stems[idx]))]
+    by_position = sorted(range(n_stems), key=lambda i: inner_stems[i]["stem5_cols"][0])
 
     c_idx = None
-    if len(matches) == 2 and len(inner_stems) == 2 and missing_arm in ("d", "t"):
-        by_position = sorted(matches, key=lambda i: inner_stems[i]["stem5_cols"][0])
+    if n_stems == 2 and missing_arm in ("d", "t"):
         c_idx = by_position[-1] if missing_arm == "t" else by_position[0]
-        logger.debug(f"anticodon {ac!r} matched both remaining stems; "
-                     f"disambiguated via missing_arm={missing_arm!r} -> stem {c_idx}")
-    elif len(matches) > 1 and len(inner_stems) == 3:
-        # full D-C-T cloverleaf with the anticodon substring coincidentally in
-        # more than one loop: the C-stem is the middle one by position. trust
-        # that only when the middle stem is itself a match (its loop holds the
-        # anticodon, as the real C-loop must); otherwise fall through.
-        middle = sorted(range(3), key=lambda i: inner_stems[i]["stem5_cols"][0])[1]
-        c_idx = middle if middle in matches else matches[0]
-        logger.debug(f"anticodon {ac!r} matched {len(matches)} loops in a 3-stem "
-                     f"structure; taking the middle stem -> {c_idx}")
-    elif matches:
-        c_idx = matches[0]
-    elif inner_stems:
-        c_idx = search_order[0]
+    elif n_stems in EXPECTED_ANTICODON_ARM_INDEX:
+        c_idx = by_position[EXPECTED_ANTICODON_ARM_INDEX[n_stems]]
+    elif n_stems == 1:
+        c_idx = by_position[0]
+
+    if c_idx is not None and ac and not loop_contains_anticodon(c_idx):
+        raise ValueError(
+            f"anticodon {ac!r} not found in the expected C-stem's own loop "
+            f"(stem {c_idx} of {n_stems}); alignment looks broken, refusing "
+            f"to guess which stem is the anticodon arm."
+        )
+    if c_idx is None and n_stems:
+        raise ValueError(
+            f"cannot determine the anticodon arm's position for a {n_stems}-stem "
+            f"structure (anticodon={ac!r}, missing_arm={missing_arm!r})."
+        )
     c_stem = inner_stems[c_idx] if c_idx is not None else None
 
     d_stem, t_stem, v_stem = None, None, None
@@ -1095,7 +1112,7 @@ def locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm=None):
         # min(after) breaks for class-ii tRNAs (ser, leu) and some mt-tRNAs
         # with a variable arm stem: it picks the variable arm as t-arm instead.
         t_stem = max(after, key=lambda g: g["stem5_cols"][0]) if after else None
-        # a genuine variable-ARM stem (class-ii: Leu, Ser) is whatever's left
+        # a real variable-ARM stem (class-ii: Leu, Ser) is whatever's left
         # in `after` besides t_stem; only trusted when exactly one such
         # candidate remains; with a single "after" candidate there's no way
         # to tell a bare variable arm from a missing T-arm from topology
@@ -1125,7 +1142,7 @@ def locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm=None):
     # class-ii variable ARM (Leu, Ser): a real nested stem-loop between the
     # c-arm and t-arm gets the Sprinzl e-series (e11-e17/e1-e5/e21-e27), not
     # the plain 44-48 sequential run; see sprinzl_map. ct_linker/vt_linker
-    # are the (up to 2 / up to 3) genuinely unpaired nt flanking the v-stem
+    # are the (up to 2 / up to 3) unpaired nt flanking the v-stem
     # on either side; var_loop is the no-v-stem fallback (class-i short loop,
     # or no stem detected), using the previous flat 44-48 behaviour unchanged.
     v_stem5 = v_stem["stem5_cols"] if v_stem else []
@@ -1223,13 +1240,15 @@ def _assign_anticodon_loop(labels, seq, c_loop, anticodon):
 
 
 def sprinzl_map(ss, seq, anticodon, missing_arm=None):
-    """assign a Sprinzl label to every nucleotide index; returns {seq_index: label}.
-    D-armless tRNAs: replacement loop (all of linker_5) is mapped onto D-arm Sprinzl
-    positions 8-26 by structural analogy, following Ozerova et al. 2024.
-    missing T-arm produces no labels for its region. missing_arm (from
-    classify_arm_loss's diagnosis on the canonical alignment, if this sequence was
-    rerouted) is passed through to locate_anticodon_stem to break a same-content
-    anticodon-match tie; see its docstring."""
+    """Assign a Sprinzl label to every nucleotide index.
+
+    - Returns: {seq_index: label}.
+    - D-armless tRNAs: the replacement loop (all of linker_5) is mapped onto
+      D-arm Sprinzl positions 8-26 by structural analogy.
+    - Missing T-arm: no labels are produced for its region.
+    - missing_arm (from classify_arm_loss's diagnosis on the canonical
+      alignment, if this sequence was rerouted) is passed through to
+      locate_anticodon_stem to resolve its 2-stem case; see its docstring."""
     topo = parse_topology(ss)
     arms = locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm)
     labels = {}
@@ -1336,12 +1355,15 @@ def _fill_stem_bulges(labels, ss, strands):
 # --- per-sequence worker: bundled for multiprocessing.Pool.map ---
 
 def process_one_record(args):
-    """worker for one (header, seq) FASTA record. takes a single tuple for
-    Pool.map compatibility; canonical_cm_tiers and armless_cm_index are inside
-    the tuple because each worker is a fresh process and module-level globals
-    aren't reliably shared across fork vs spawn. per-tier canonical CM
-    resolution (which .cm path applies to this aa, if any) happens inside
-    select_cm_and_align, not here; see _resolve_canonical_for_tier."""
+    """worker for one (header, seq) FASTA record.
+
+    - takes a single tuple for Pool.map compatibility.
+    - canonical_cm_tiers and armless_cm_index are inside that tuple: each
+      worker is a fresh process, and module-level globals aren't reliably
+      shared across fork vs spawn.
+    - per-tier canonical CM resolution (which .cm path applies to this aa,
+      if any) happens inside select_cm_and_align; see
+      _resolve_canonical_for_tier."""
     header, seq, canonical_cm_tiers, armless_cm_index, debug = args
     seq = seq.upper().replace("T", "U")
 
@@ -1397,7 +1419,7 @@ def process_one_record(args):
                  f"offset={diagnosis.get('register_offset')})")
     for i, stem in enumerate(diagnosis.get("per_stem_complementarity", [])):
         logger.debug(f"    stem[{i}]: n_pairs={stem['n_pairs']} "
-                     f"n_compatible={stem['n_compatible']} p={stem['p_value']}")
+                     f"n_compatible={stem['n_compatible']}")
     if routing.get("threading_failure_elem"):
         logger.debug(f"  threading failure: patched via RNAfold; ss: {final_ss}")
     if routing["rerouted"]:
@@ -1444,7 +1466,7 @@ def process_one_record(args):
 #
 # T_OR_VAR_ARM_MISSING_slots=[n,..]: one or more slots fail absent() (0-indexed,
 #   5'->3'). a middle slot means an optional variable-arm stem, never decisive on
-#   its own (no armless CM for it). the LAST slot is the T-arm: genuine loss, or a
+#   its own (no armless CM for it). the LAST slot is the T-arm: real loss, or a
 #   threading failure patched via RNAfold; see select_cm_and_align step 3.
 #
 # UPSTREAM_ARM_MISSING_offset=n: D-arm absent, detected via register shift

@@ -9,13 +9,40 @@ not been tested on cytosolic or bacterial tRNAs.
 
 Give sprinx a FASTA of mt-tRNA sequences (see "Header format" below for the
 header conventions it understands) and it aligns each one to a covariance
-model, works out whether an arm (D, T, or both) is genuinely missing or the
+model, works out whether an arm (D, T, or both) is missing or the
 alignment just went wrong in that region, and reroutes truly armless
 sequences to a matching armless model (Ozerova et al. 2024). It then assigns
 a Sprinzl position to every nucleotide. The output is a per-nucleotide TSV:
 Sprinzl position, structural region, which model was used, whether the
 sequence was rerouted, and the arm-loss call. An optional standalone script
 renders the result as an R2DT 2D structure plot.
+
+## How it works
+
+1. `cmalign` each sequence against every canonical CM tier
+   (`--notrunc --nonbanded -g`). 
+   Default: bacterial CM (endosymbiosis), then clade-specific CMs
+   Keep the tier that anchors the anticodon and
+   accounts for the most total base-paired columns across all stems (ties go
+   to the earlier tier).
+2. Locate the anticodon by position: the D-arm always precedes it, any
+   variable arm and the T-arm always follow it. If it turns up in the first
+   stem-loop instead of the second, the D-arm didn't occupy its own slot -
+   D-arm missing.
+3. Otherwise, check each stem: absent if it has fewer than 3 non-gap column
+   pairs, or fewer than 2 of those are real WC/wobble pairs. This flags the
+   D-arm, the T-arm, both, or neither.
+4. For any arm flagged absent (other than a D-arm caught by step 2): does
+   that span have enough sequence to physically close a hairpin (stem length
+   + 3 nt)? If not, that's an arm loss. If so, fold just that span with
+   RNAfold: a fold means cmalign mis-threaded the arm (patch it in place
+   with the fold); no fold means arm loss after all.
+5. Real arm loss: reroute to the matching armless CM (Ozerova et al.
+   2024), isoacceptor ties broken by anticodon. Otherwise: assign Sprinzl
+   labels on the alignment already in hand.
+
+Exact thresholds and function names for each step are in the module
+docstring at the top of [src/sprinx/label.py](src/sprinx/label.py).
 
 ## Installation
 
@@ -99,9 +126,13 @@ and the examples above use; see "Layout" below.
 - The order canonical CMs are tried in (e.g. bacterial whole-family, then
   metazoan per-AA, then armless rerouting) is a heuristic. It hasn't been
   tested outside metazoan mitochondrial sequences.
-- The check that tells a genuine arm loss apart from a bad alignment works
+- The check that tells arm loss apart from a bad alignment works
   well for arm spans of roughly 13-20 nt; it hasn't been validated at the
   edges of that range.
+- When exactly 3 stem-loops are found, the 2nd is always assumed to be the
+  anticodon arm and the 3rd the T-arm. There's no way to instead read the
+  3rd as a variable arm with the T-arm actually missing; that case isn't
+  distinguished from an ordinary D-C-T cloverleaf with no variable arm.
 - No support for cytosolic, bacterial, or archaeal tRNAs.
 
 ### Why not just pick the best-scoring model?
@@ -168,7 +199,7 @@ Every processed sequence gets exactly one of these:
 - `T_OR_VAR_ARM_MISSING_slots=[n,..]`: one or more arm slots look empty
   (0-indexed, 5'->3'). A middle slot usually means an optional variable arm,
   not something sprinx reroutes for. The last slot is the T-arm: either
-  genuinely missing, or patched via RNAfold if the alignment just misplaced
+  truly missing, or patched via RNAfold if the alignment just misplaced
   it.
 - `UPSTREAM_ARM_MISSING_offset=n`: the D-arm looks missing, caught by the
   anticodon landing further along the model than expected.
@@ -235,14 +266,22 @@ recipe/
 conftest.py                  pytest setup, loads .env / SPRINX_* vars for integration tests
 env.example                  template for .env
 data/                        example FASTA, canonical CM, armless CM library
+  README.md                    data curation notes: evidence-tier definitions used in
+                                curation_metadata.tsv
+  curation_metadata.tsv        per-sequence literature evidence for each armless/doubly-armless
+                                fixture entry (species, category, evidence tier, source DOI, notes)
   canonical.fa                 36 real cloverleaf mt-tRNAs (human, mouse, S. cerevisiae,
                                 S. pombe), ground truth for "no arm-loss call should fire"
-  D_armless.fa                 3 real D-armless mt-tRNAs, ground truth for missing_arm="d"
-  T_armless.fa                 17 real T-armless mt-tRNAs, ground truth for missing_arm="t"
-  both_armless_R_culicivorax_mt-tRNA-Ile.fa  1 real doubly-armless mt-tRNA (R. culicivorax),
-                                ground truth for missing_arm="d_and_t"
-  all.fa                       concatenation of the four files above (57 sequences),
-                                for exercising every arm-loss shape in one run
+  D_armless.fa                 4 real D-armless mt-tRNAs, ground truth for missing_arm="d";
+                                curated with literature evidence, see curation_metadata.tsv
+  T_armless.fa                 4 real T-armless mt-tRNAs (Ascaris suum), ground truth for
+                                missing_arm="t"; curated with literature evidence, see
+                                curation_metadata.tsv
+  both_armless.fa             3 real doubly-armless mt-tRNAs (R. culicivorax), ground truth
+                                for missing_arm="d_and_t"; curated with literature evidence,
+                                see curation_metadata.tsv
+  spombe_mt.no_linker.fa     25 S. pombe mt-tRNAs (linker sequence trimmed), used as a
+                                source of real sequences in integration tests
   TRNAinf-euk.cm                eukaryotic whole-family canonical CM (QutRNA2)
   mitofinder_models/           symlink to canonical CMs from MitoFinder, old INFERNAL-1 [1.0] format;
                                 cmalign (Infernal 1.1.x) refuses these outright
@@ -255,6 +294,9 @@ data/                        example FASTA, canonical CM, armless CM library
                                 cmconvert -a "$f" > "data/full_tRNAs_mitofinder_tRNAScanSE/$(basename "$f")"; done`
   truncated_cm/                armless CM library, `armless_trn{AA}_wo_{d,t,d_and_t}.cm`
                                 (Ozerova et al. 2024), used for --armless-cm-dir
+  combined.cm*                 unused leftover from an earlier cmscan/combined-CM-database
+                                exploration (see "Why not just pick the best-scoring model?"
+                                above); not read by any current code path
 tests/
   test_sprinx_unit.py          unit tests, run anywhere
   test_sprinx_integration.py   runs real cmalign / RNAfold end to end

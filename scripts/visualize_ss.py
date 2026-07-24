@@ -3,7 +3,7 @@
 visualize_ss.py: R2DT-rendered 2D diagrams for a sprinx TSV.
 
 standalone script, not part of the installable sprinx package: R2DT needs a
-Singularity image, which is heavy and unnecessary for anything just consuming
+Singularity image, which is unnecessary for anything just consuming
 sprinx's TSV output (e.g. QutRNA2). needs sprinx itself installed (for
 sprinx.label's header parsing and subprocess helpers) plus its own extra
 dependency, cairosvg (`pip install cairosvg`), and a Singularity/R2DT image
@@ -13,20 +13,22 @@ reads a sprinzl_mapping.tsv produced by `sprinx --out ...` (see sprinx.cli):
 seq_id, seq_index, nucleotide, sprinzl_position, region, cm_used, rerouted,
 arm_loss_call, structure, cm_only_structure, rnafold_only_structure. groups
 rows back into per-record seq/ss/sprinzl, so no cmalign re-run is needed.
-renders each record's own final structure (structure column) via R2DT's
-template-free "stockholm" mode, not a structure R2DT would re-derive itself
-from its own template library (which could silently disagree with sprinx's
-own call). R2DT only accepts a real multi-sequence alignment as input, and
-these records aren't aligned to each other at all, so build_r2dt_stockholm
-fakes one: every record's sequence is concatenated end-to-end into a single
-row, with one #=GC structureID region marking each record's own column span;
-see https://docs.r2dt.bio for the annotation format.
+
+renders each record's final structure (the structure column) via R2DT's
+template-free "stockholm" mode. this is sprinx's structural call, which
+could disagree with whatever structure R2DT would derive on its own from its
+template library. R2DT only accepts a real multi-sequence alignment as
+input, but these records aren't aligned to each other at all, so
+build_r2dt_stockholm fakes one: every record's sequence is concatenated
+end-to-end into a single row, with one #=GC structureID region marking each
+record's column span. see https://docs.r2dt.bio for the annotation
+format.
 
 for records where sprinx patched a CM threading failure via RNAfold (the
 cm_only_structure / rnafold_only_structure columns are populated), also
 renders the pre-patch CM-only structure and the naive whole-sequence RNAfold
-fold alongside the primary plot, so the patch's effect is visible rather than
-assumed (see sprinx.label.process_one_record's module docstring, section 3c).
+fold alongside the primary plot, so the patch's effect is visible rather
+than assumed.
 
 usage: see README.md, or `python visualize_ss.py --help`.
 """
@@ -121,18 +123,20 @@ ET.register_namespace("", SVG_NS)
 
 
 def _flip_panel_north(panel, width, height):
-    """mirror a panel vertically in place (flip y only, x untouched): R2R (the
-    template-free layout engine R2DT uses here) always draws the acceptor
-    stem at the bottom, with no orientation flag exposed to change that
-    (confirmed consistent across every sequence/shape checked, so a single
-    unconditional flip suffices). mirror y only: a full 180-degree rotation
-    would negate x too and swing every side arm from east to west; mirroring y
-    alone moves the acceptor stem to the top while leaving east/west exactly
-    where R2R put them.
-    every <text> glyph gets its own counter-mirror about its own y: two
-    y-mirrors about different lines compose into a pure translation, so the
-    glyph itself stays upright while still landing at its correctly-mirrored
-    position, only the backbone/pairing geometry actually flips."""
+    """mirror a panel vertically in place (flip y only, x untouched).
+
+    - why: R2R (the template-free layout engine R2DT uses here) always draws
+      the acceptor stem at the bottom, with no orientation flag to change
+      that (confirmed consistent across every sequence/shape checked, so one
+      unconditional flip suffices).
+    - why y-only, not a full 180-degree rotation: rotating would negate x
+      too and swing every side arm from east to west. mirroring y alone
+      moves the acceptor stem to the top while leaving east/west as R2R
+      drew them.
+    - every <text> glyph gets its own counter-mirror about its own y: two
+      y-mirrors about different lines compose into a pure translation, so
+      the glyph stays upright while still landing at its mirrored position -
+      only the backbone/pairing geometry actually flips."""
     wrapper = ET.Element(f"{{{SVG_NS}}}g", {"transform": f"matrix(1 0 0 -1 0 {height})"})
     for child in list(panel):
         panel.remove(child)
@@ -150,13 +154,16 @@ SPRINZL_LABEL_STEP = 5
 def _inject_sprinzl_labels(panel, sprinzl, label_step=SPRINZL_LABEL_STEP):
     """replace R2DT's own plain sequence-position numbering (1, 2, 3, ...,
     shown every 10th residue by default, unrelated to Sprinzl coordinates)
-    with sprinx's own Sprinzl labels. shown every label_step-th INTEGER
-    position, but always for lettered insertions (17a, 20a, ...) since those
-    don't follow a regular numeric cadence and would otherwise never appear.
-    each nucleotide is its own top-level <g><title>i (...)</title><text>BASE
-    </text></g> emitted by R2DT in strict 5'->3' order, so a running count of
-    real base letters (skipping the synthetic 5'/3' end markers) lines up
-    exactly with sprinzl's own 0-indexed final_seq positions."""
+    with sprinx's own Sprinzl labels.
+
+    - shown every label_step-th integer position, but always for lettered
+      insertions (17a, 20a, ...), since those don't follow a regular numeric
+      cadence and would otherwise never appear.
+    - each nucleotide is its own top-level <g><title>i (...)</title>
+      <text>BASE</text></g>, emitted by R2DT in strict 5'->3' order. a
+      running count of real base letters (skipping the synthetic 5'/3' end
+      markers) lines up exactly with sprinzl's own 0-indexed final_seq
+      positions."""
     for g in list(panel):
         text = g.find(f"{{{SVG_NS}}}text")
         line = g.find(f"{{{SVG_NS}}}line")
@@ -207,17 +214,19 @@ def _wrap_caption(text, cell_w, max_lines=4):
 
 def _grid_svg(panels, ncols, gap=20):
     """panels: list of (svg_root_element, width, height, caption, sprinzl).
-    arranges them into a real grid (ncols per row), unlike R2DT's own
-    --stitch (which only lays panels left-to-right in a single row, unusable
-    past a handful of sequences, since the file just gets wider without
-    bound). cell size is uniform (max panel width/height across all panels)
-    so rows/columns stay aligned; each panel keeps its own native size,
-    centered in its cell. captions are wrapped to the cell width (see
-    _wrap_caption) and centered above the panel, not left-aligned to the
-    cell, since a narrow panel in a wide cell would otherwise read as
-    belonging to its neighbour. nested <svg> elements are SVG's own mechanism
-    for embedding one diagram inside another at a given position/size, no
-    rasterization needed to compose them."""
+
+    - arranges panels into a grid (ncols per row). R2DT's own --stitch
+      only lays panels left-to-right in a single row, which gets unusably
+      wide past a handful of sequences.
+    - cell size is uniform (max panel width/height across all panels) so
+      rows/columns stay aligned; each panel keeps its own native size,
+      centered in its cell.
+    - captions are wrapped to the cell width (see _wrap_caption) and
+      centered above the panel: left-aligning to the cell would make a
+      narrow panel in a wide cell read as belonging to its neighbour.
+    - nested <svg> elements are SVG's own mechanism for embedding one
+      diagram inside another at a given position/size; no rasterization
+      needed to compose them."""
     cell_w = max(w for _, w, _, _, _ in panels) + gap
     caption_lines = [_wrap_caption(caption, cell_w) for _, _, _, caption, _ in panels]
     caption_height = max(len(lines) for lines in caption_lines) * CAPTION_LINE_HEIGHT + 6
