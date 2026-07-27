@@ -39,7 +39,7 @@ test:
     - cmalign -h
 
 about:
-  home: "https://github.com/swstkm/sprinx"
+  home: "https://github.com/dieterich-lab/sprinx"
   summary: "Sprinzl-coordinate annotation for mitochondrial tRNAs"
   description: |
     Assigns Sprinzl coordinates to mitochondrial tRNA sequences by aligning
