@@ -111,7 +111,7 @@ def drop_orphan_brackets(ss):
     return "".join(ss)
 
 
-HEADER_TRNA_NAME_RE = re.compile(r"tRNA-([A-Za-z]{3})-([ACGTUacgtu]{3})")
+HEADER_TRNA_NAME_RE = re.compile(r"tRNA-([A-Za-z]+\d*)-([ACGTUacgtu]{3})")
 
 
 def header_to_anticodon(header):
