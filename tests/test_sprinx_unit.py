@@ -19,25 +19,25 @@ import RNA
 
 from sprinx import common, mito
 
-BUNDLE_PATH = os.path.join(os.path.dirname(__file__), "test_data_bundle.txt")
+MITO_BUNDLE_PATH = os.path.join(os.path.dirname(__file__), "test_data_bundle.txt")
 
 
-def load_bundle():
-    text = open(BUNDLE_PATH).read()
+def load_mito_bundle():
+    text = open(MITO_BUNDLE_PATH).read()
     chunks = re.split(r"^==> (.+?) <==\n", text, flags=re.MULTILINE)[1:]
     return {name: content for name, content in zip(chunks[0::2], chunks[1::2])}
 
 
-BUNDLE = load_bundle()
+MITO_BUNDLE = load_mito_bundle()
 
 
-def load_sto(name):
-    return common.parse_multi_sto(BUNDLE[name], from_text=True)
+def load_mito_sto(name):
+    return common.parse_multi_sto(MITO_BUNDLE[name], from_text=True)
 
 
-def load_fa(name):
+def load_mito_fa(name):
     seqs, cur = {}, None
-    for line in BUNDLE[name].splitlines():
+    for line in MITO_BUNDLE[name].splitlines():
         if line.startswith(">"):
             cur = line[1:].strip()
             seqs[cur] = ""
@@ -122,7 +122,7 @@ def test_header_field_extraction():
 # -----------------------------------------------------------------------
 
 def test_canonical36_no_false_positives():
-    seqs, ss = load_sto("aln_canonical36_qutrna_flags.sto")
+    seqs, ss = load_mito_sto("aln_canonical36_qutrna_flags.sto")
     assert len(seqs) == 36
     t_flagged, d_flagged, n_unanchored = [], [], 0
     for name, aligned in seqs.items():
@@ -146,18 +146,18 @@ def test_arm_loss_diagnosis_per_structural_class():
     for sto, tag in [("aln_T_canonical_qutrna.sto", "Thr|UGU|Homo"),
                      ("aln_E_canonical_qutrna.sto", "Glu|UUC|Homo"),
                      ("aln_L1_canonical_qutrna.sto", "Leu1|UAG|Homo")]:
-        seqs, ss = load_sto(sto)
+        seqs, ss = load_mito_sto(sto)
         name = next(k for k in seqs if tag in k)
         d = mito.classify_arm_loss(name, seqs[name], ss)
         assert d["missing_arm"] is None and d["register_offset"] in (0, None), (tag, d["call"])
     # D-armless: register shift offset==1
-    seqs, ss = load_sto("aln_S1_qutrna.sto")
+    seqs, ss = load_mito_sto("aln_S1_qutrna.sto")
     for name, aligned in seqs.items():
         d = mito.classify_arm_loss(name, aligned, ss)
         if d["anticodon_stem_index"] is not None:
             assert d["register_offset"] == 1, (name, d["call"])
     # T-armless: never a D-arm call, and no register shift (downstream loss)
-    seqs, ss = load_sto("aln_Tarmless_qutrna.sto")
+    seqs, ss = load_mito_sto("aln_Tarmless_qutrna.sto")
     assert len(seqs) == 17
     for name, aligned in seqs.items():
         d = mito.classify_arm_loss(name, aligned, ss)
@@ -165,7 +165,7 @@ def test_arm_loss_diagnosis_per_structural_class():
         if d["anticodon_stem_index"] is not None:
             assert d["register_offset"] == 0, (name, d["call"])
     # doubly-armless
-    seqs, ss = load_sto("aln_both_armless_mature.sto")
+    seqs, ss = load_mito_sto("aln_both_armless_mature.sto")
     name = "NC_008640.1:3203-3266|Romanomermis_culicivorax|Ile|GAU"
     assert mito.classify_arm_loss(name, seqs[name], ss)["missing_arm"] in ("d", "ambiguous", "d_and_t")
 
@@ -174,7 +174,7 @@ def test_d_arm_absent_without_register_shift():
     """no-shift D-arm path (for CMs modeling an extra stem, e.g. TRNAinf-bact.cm).
     no bundled fixture shows it naturally, so blank a real D-arm's own stem columns
     while leaving the anticodon anchor untouched."""
-    seqs, ss = load_sto("aln_canonical36_qutrna_flags.sto")
+    seqs, ss = load_mito_sto("aln_canonical36_qutrna_flags.sto")
     name = next(k for k in seqs if "Thr|UGU|Homo" in k)
     base = mito.classify_arm_loss(name, seqs[name], ss)
     assert base["missing_arm"] is None, "needs a canonical baseline"
@@ -191,13 +191,13 @@ def test_d_arm_absent_without_register_shift():
 
 def test_stem_complementarity_and_anticodon_search():
     # T-armless slot: n_pairs==0 (no column has both partners non-gap)
-    seqs, ss = load_sto("aln_Tarmless_qutrna.sto")
+    seqs, ss = load_mito_sto("aln_Tarmless_qutrna.sto")
     t_elem = common.get_stem_loop_elements(ss)[-1]
     for name, aligned in seqs.items():
         assert common.stem_complementarity(aligned, ss, t_elem)["n_pairs"] == 0, name
     # '.' (multi-seq insert gap) must be stripped alongside '-' before the search,
     # or a '.' in a loop can spuriously match the anticodon.
-    seqs, ss = load_sto("aln_canonical36_qutrna_flags.sto")
+    seqs, ss = load_mito_sto("aln_canonical36_qutrna_flags.sto")
     elements = common.get_stem_loop_elements(ss)
     glu = next(k for k in seqs if "Glu|UUC|Homo" in k)
     assert "." in seqs[glu]
@@ -224,7 +224,7 @@ def test_sprinzl_map_real_data_invariants():
         ("aln_both_armless_mature.sto", "culicivorax",   "GAU", "d_and_t"),
     ]
     for sto, tag, anticodon, missing_arm in cases:
-        seqs, ss_cons = load_sto(sto)
+        seqs, ss_cons = load_mito_sto(sto)
         name = next(k for k in seqs if tag in k)
         seq, ss = common.finalize_structure({"aligned_seq": seqs[name], "ss_cons": ss_cons})
         sprinzl = common.sprinzl_map(ss, seq, anticodon, missing_arm)
@@ -247,7 +247,7 @@ def test_c_stem3_labels_not_overwritten_by_var_loop():
     the loop, or its own assign_slots call bleeds into c-stem-3's columns.
     checked against known-correct values directly, since monotonicity alone
     can't catch a shifted-but-still-increasing run."""
-    seqs, ss_cons = load_sto("aln_E_canonical_qutrna.sto")
+    seqs, ss_cons = load_mito_sto("aln_E_canonical_qutrna.sto")
     name = next(k for k in seqs if "Glu|UUC|Homo" in k)
     seq, ss = common.finalize_structure({"aligned_seq": seqs[name], "ss_cons": ss_cons})
     topo = common.parse_topology(ss)
@@ -262,7 +262,7 @@ def test_variable_arm_stem_gets_e_series_labels():
     reserved for it (e11-e17 stem/e1-e5 loop/e21-e27 stem, paired e1N<->e2N),
     and every e-labelled base is complementary to its declared pairing
     partner, not just present."""
-    seqs, ss_cons = load_sto("aln_canonical36_qutrna_flags.sto")
+    seqs, ss_cons = load_mito_sto("aln_canonical36_qutrna_flags.sto")
     name = next(k for k in seqs if "Tyr|GUA|Saccharomyces" in k)
     seq, ss = common.finalize_structure({"aligned_seq": seqs[name], "ss_cons": ss_cons})
     sprinzl = common.sprinzl_map(ss, seq, "GUA", None)
@@ -404,7 +404,7 @@ def test_three_stem_double_match_picks_middle_stem():
 
 def test_finalize_structure_clean_balanced_equal_length():
     for sto in ("aln_E_canonical_qutrna.sto", "aln_S1_qutrna.sto", "aln_Tarmless_qutrna.sto"):
-        seqs, ss_cons = load_sto(sto)
+        seqs, ss_cons = load_mito_sto(sto)
         for name, aligned in seqs.items():
             seq, ss = common.finalize_structure({"aligned_seq": aligned, "ss_cons": ss_cons})
             assert "." not in seq and "-" not in seq, f"{sto}/{name}"
@@ -418,7 +418,7 @@ class TestArmSpanAndPatch:
     CANONICAL_SS = "(((((((..((((......)))).(((((.......)))))....................)))))))"
 
     def _val(self):
-        seqs, ss = load_sto("aln_canonical36_qutrna_flags.sto")
+        seqs, ss = load_mito_sto("aln_canonical36_qutrna_flags.sto")
         return seqs, ss, common.get_stem_loop_elements(ss)
 
     def _synthetic_val_aln(self, seqs, elems):
@@ -437,7 +437,7 @@ class TestArmSpanAndPatch:
         fseq, _ = common.finalize_structure({"aligned_seq": seqs[val], "ss_cons": ss})
         assert mito.arm_is_threading_failure(seqs[val], fseq, t_elem)
         # truly T-armless: fails the span check and does not fold.
-        tseqs, tss = load_sto("aln_Tarmless_qutrna.sto")
+        tseqs, tss = load_mito_sto("aln_Tarmless_qutrna.sto")
         te = common.get_stem_loop_elements(tss)[-1]
         assert not any(mito.arm_span_has_enough_sequence(a, te) for a in tseqs.values())
         for name, a in tseqs.items():
@@ -446,7 +446,7 @@ class TestArmSpanAndPatch:
 
     def test_patch_recovers_pairs_balanced(self):
         seqs, _, elems = self._val()
-        val_seq = load_fa("canonical.fa")[next(k for k in load_fa("canonical.fa") if "Val|UAC|Homo" in k)]
+        val_seq = load_mito_fa("canonical.fa")[next(k for k in load_mito_fa("canonical.fa") if "Val|UAC|Homo" in k)]
         aln = self._synthetic_val_aln(seqs, elems)
         patched = mito.patch_threading_failure_arm("probe", aln, val_seq, self.CANONICAL_SS, elems[-1])
         assert patched.count("(") > self.CANONICAL_SS.count("(")
@@ -459,7 +459,7 @@ class TestArmSpanAndPatch:
         overrides it instead of aborting, since structure inside a confirmed
         threading-failure span is untrustworthy by definition."""
         seqs, _, elems = self._val()
-        val_seq = load_fa("canonical.fa")[next(k for k in load_fa("canonical.fa") if "Val|UAC|Homo" in k)]
+        val_seq = load_mito_fa("canonical.fa")[next(k for k in load_mito_fa("canonical.fa") if "Val|UAC|Homo" in k)]
         aln = self._synthetic_val_aln(seqs, elems)
         # a single bp at the exact position the eventual fold also uses (46-57),
         # directionally consistent with the fold it will be overridden by.
@@ -485,6 +485,14 @@ def test_cm_filename_indexing(tmp_path):
     # armless CMs excluded; duplicate aa 'A' keeps exactly one deterministically.
     assert set(canonical) == {"A"}
     assert canonical["A"] in (str(tmp_path / "Metazoa_A.cm"), str(tmp_path / "OtherClade_A.cm"))
+
+
+def test_resolve_canonical_for_tier():
+    # a plain path applies to every aa; a dict resolves by aa or returns None.
+    assert mito._resolve_canonical_for_tier("any|header|x|y", "ACGU", "/p.cm") == "/p.cm"
+    tier = {"A": "/models/Ala.cm", "V": "/models/Val.cm"}
+    assert mito._resolve_canonical_for_tier("id|Ala|UGC|taxon", "ACGU", tier) == "/models/Ala.cm"
+    assert mito._resolve_canonical_for_tier("id|Trp|UCA|taxon", "ACGU", tier) is None
 
 
 def test_aa_field_to_cm_code():
