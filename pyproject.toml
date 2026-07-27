@@ -2,6 +2,7 @@
 name = "sprinx"
 version = "0.1.0"
 description = "Sprinzl-coordinate annotation for mitochondrial tRNAs"
+license = {file = "LICENSE"}
 requires-python = ">=3.10"
 dependencies = [
     "pandas",

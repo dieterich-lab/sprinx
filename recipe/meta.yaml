@@ -49,9 +49,7 @@ about:
     matching armless CM. A component of the qutrna2 pipeline, published
     standalone for transparency and reuse; not a general-purpose tRNA
     annotator.
-  # TODO: no LICENSE file exists in this repo yet. bioconda-recipes requires
-  # one; add a license and fill this in before any real submission upstream.
-  license: TODO-add-a-license
+  license: GPL-3.0-or-later
   license_file: LICENSE
 
 extra:

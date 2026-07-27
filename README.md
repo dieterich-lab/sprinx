@@ -380,3 +380,7 @@ pytest tests/test_sprinx_integration.py     # requires cmalign and SPRINX_CANONI
 
 Paths in `.env` must be absolute. Relative paths fail silently the moment
 `cwd` differs from what you assumed.
+
+## License
+
+GPL-3.0-or-later. See [LICENSE](LICENSE).
