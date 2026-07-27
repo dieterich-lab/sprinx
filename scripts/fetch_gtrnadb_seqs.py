@@ -25,6 +25,10 @@ script reproduces these files from the same URLs.
 
 Sequences identical within a domain (common for multi-copy tRNA genes) are
 collapsed to one record, keeping whichever header was encountered first.
+
+Entries GtRNAdb tags 'Und' (undetermined isotype) or 'Sup' (suppressor
+tRNA, reads a stop codon) are dropped: tRNAscan-SE's per-isotype CM
+databases have no matching model for either.
 """
 
 GTRNADB_SOURCES = {
@@ -76,18 +80,26 @@ def fetch_fasta(url):
     return records
 
 
+# aa codes with no matching CM in tRNAscan-SE's per-isotype databases:
+# 'Und' is GtRNAdb's undetermined-isotype call (anticodon 'NNN'); 'Sup'
+# (suppressor tRNAs, real anticodon reading a stop codon) has no isotype
+# bucket either, since amino-acid assignment is an anticodon->codon-table
+# lookup and stop codons have no entry in that table.
+NO_CM_AAS = {"Und", "Sup"}
+
+
 def is_valid_record(header):
-    """True if header names an ACGU anticodon. False for GtRNAdb's own
-    'Undet'/'NNN' undetermined-isotype calls. Raises on any other non-ACGU
-    anticodon: an unexpected header format."""
+    """True if header names an aa with a matching CM and an ACGU anticodon.
+    False for NO_CM_AAS. Raises on any other non-ACGU anticodon: an
+    unexpected header format."""
     m = HEADER_RE.search(header)
     if not m:
         raise ValueError(f"header does not look like GtRNAdb format: {header!r}")
     aa, anticodon = m.group(1), m.group(2).upper().replace("T", "U")
+    if aa in NO_CM_AAS:
+        return False
     if re.fullmatch(r"[ACGU]{3}", anticodon):
         return True
-    if aa == "Und" and anticodon == "NNN":
-        return False
     raise ValueError(f"unexpected non-ACGU anticodon in header: {header!r}")
 
 
@@ -115,7 +127,7 @@ def build_domain_fasta(domain, sources):
             else:
                 n_skipped += 1
     if n_skipped:
-        print(f"{domain}: skipped {n_skipped} undetermined-isotype entries")
+        print(f"{domain}: skipped {n_skipped} entries with no isotype CM ({sorted(NO_CM_AAS)})")
     return dedupe_by_sequence(records)
 
 

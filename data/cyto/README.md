@@ -7,6 +7,10 @@ script reproduces these files from the same URLs.
 Sequences identical within a domain (common for multi-copy tRNA genes) are
 collapsed to one record, keeping whichever header was encountered first.
 
+Entries GtRNAdb tags 'Und' (undetermined isotype) or 'Sup' (suppressor
+tRNA, reads a stop codon) are dropped: tRNAscan-SE's per-isotype CM
+databases have no matching model for either.
+
 ## bact_gtrnadb.fa
 99 unique sequences, 74 duplicate copies collapsed (see dedup_list.txt).
 Sources:
@@ -20,7 +24,7 @@ Sources:
 - Haloferax_volcanii: https://gtrnadb.ucsc.edu/genomes/archaea/Halo_volc_DS2/haloVolc1-mature-tRNAs.fa
 
 ## euk_gtrnadb.fa
-533 unique sequences, 767 duplicate copies collapsed (see dedup_list.txt).
+531 unique sequences, 767 duplicate copies collapsed (see dedup_list.txt).
 Sources:
 - Drosophila_melanogaster: https://gtrnadb.ucsc.edu/genomes/eukaryota/Dmela6/dm6-mature-tRNAs.fa
 - Homo_sapiens: https://gtrnadb.ucsc.edu/genomes/eukaryota/Hsapi38/hg38-mature-tRNAs.fa

@@ -36,7 +36,6 @@ usage: see README.md, or `python visualize_ss.py --help`.
 import argparse
 import glob
 import os
-import re
 import shutil
 import tempfile
 import textwrap
@@ -50,13 +49,6 @@ from sprinx.common import header_to_aa, header_to_taxon, run
 
 R2DT_DEFAULT_IMAGE = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "lib", "r2dt")
-
-
-def _sanitize_r2dt_name(text, maxlen=40):
-    """structureID/regionID names may not contain '|' or '.' (the annotation
-    line's own delimiters); collapse anything else to '_' and truncate."""
-    safe = re.sub(r"[^A-Za-z0-9]+", "_", text).strip("_")
-    return safe[:maxlen] or "seq"
 
 
 def _r2dt_id_line(segments):
@@ -79,14 +71,15 @@ def build_r2dt_stockholm(plotted):
     """records (each with 'header', 'seq', 'ss') -> (Stockholm text, region
     names) with one structureID region per record, in the same order as
     `plotted`. regionID is the aa field, so R2DT's --color-by region groups
-    isoacceptors under one colour. names are de-duplicated with a numeric
-    suffix since sanitizing distinct headers can collide."""
-    names, seen = [], {}
-    for r in plotted:
-        base = _sanitize_r2dt_name(r["header"])
-        n = seen.get(base, 0)
-        seen[base] = n + 1
-        names.append(f"{base}_{n}" if n else base)
+    isoacceptors under one colour.
+
+    names are a plain per-record index ('s0000', 's0001', ...), not derived
+    from the header: a header-derived name must fit within that record's own
+    sequence length (_r2dt_id_line's column span), so records sharing a long
+    common prefix can truncate to the same name and make the later
+    glob.glob(f"{name}_*.svg") in make_plot pick the wrong file. An index is
+    always short enough to survive intact and unique by construction."""
+    names = [f"s{i:04d}" for i in range(len(plotted))]
 
     concat_seq = "".join(r["seq"] for r in plotted)
     concat_ss = "".join(r["ss"] for r in plotted)
@@ -148,22 +141,27 @@ def _flip_panel_north(panel, width, height):
 
 
 NUCLEOTIDE_LETTERS = set("ACGUN")
-SPRINZL_LABEL_STEP = 5
+ANTICODON_LABELS = {"34", "35", "36"}
+CCA_TAIL_LABELS = {"74", "75", "76"}
 
 
-def _inject_sprinzl_labels(panel, sprinzl, label_step=SPRINZL_LABEL_STEP):
-    """replace R2DT's own plain sequence-position numbering (1, 2, 3, ...,
-    shown every 10th residue by default, unrelated to Sprinzl coordinates)
-    with sprinx's own Sprinzl labels.
+def _is_block_boundary(seq_idx, region):
+    """True if seq_idx is the first or last position of its region (its
+    SPRINZL_REGION block), or has no region on one side (sequence end)."""
+    prev_region = region.get(seq_idx - 1)
+    next_region = region.get(seq_idx + 1)
+    return region.get(seq_idx) != prev_region or region.get(seq_idx) != next_region
 
-    - shown every label_step-th integer position, but always for lettered
-      insertions (17a, 20a, ...), since those don't follow a regular numeric
-      cadence and would otherwise never appear.
-    - each nucleotide is its own top-level <g><title>i (...)</title>
-      <text>BASE</text></g>, emitted by R2DT in strict 5'->3' order. a
-      running count of real base letters (skipping the synthetic 5'/3' end
-      markers) lines up exactly with sprinzl's own 0-indexed final_seq
-      positions."""
+
+def _inject_sprinzl_labels(panel, sprinzl, region):
+    """replace R2DT's own sequence-position numbering with sprinx's Sprinzl
+    labels: shown at each SPRINZL_REGION block's start/end, every lettered
+    insertion (17a, 20a, ...), and the anticodon (34/35/36) always. also
+    colors the anticodon red and any present CCA-tail bases (74/75/76) gray.
+
+    nucleotides are top-level <g><title>i (...)</title><text>BASE</text></g>
+    in strict 5'->3' order (R2DT's own emission order); a running count of
+    real base letters lines up with sprinzl's 0-indexed final_seq positions."""
     for g in list(panel):
         text = g.find(f"{{{SVG_NS}}}text")
         line = g.find(f"{{{SVG_NS}}}line")
@@ -180,12 +178,13 @@ def _inject_sprinzl_labels(panel, sprinzl, label_step=SPRINZL_LABEL_STEP):
         if (text.text or "").strip().upper() not in NUCLEOTIDE_LETTERS:
             continue
         label = sprinzl.get(seq_idx, "")
+        if label in ANTICODON_LABELS:
+            text.set("style", "fill:red")
+        elif label in CCA_TAIL_LABELS:
+            text.set("style", "fill:gray")
+        show = label and (not label.isdigit() or label in ANTICODON_LABELS
+                          or _is_block_boundary(seq_idx, region))
         seq_idx += 1
-        show = label and (
-            not label[:-1].isdigit()
-            or int(re.match(r"\d+", label).group()) % label_step == 0
-            or label == "1"
-        )
         if not show:
             continue
         x, y = float(text.get("x")), float(text.get("y"))
@@ -213,7 +212,8 @@ def _wrap_caption(text, cell_w, max_lines=4):
 
 
 def _grid_svg(panels, ncols, gap=20):
-    """panels: list of (svg_root_element, width, height, caption, sprinzl).
+    """panels: list of (svg_root_element, width, height, caption, sprinzl,
+    region).
 
     - arranges panels into a grid (ncols per row). R2DT's own --stitch
       only lays panels left-to-right in a single row, which gets unusably
@@ -227,16 +227,16 @@ def _grid_svg(panels, ncols, gap=20):
     - nested <svg> elements are SVG's own mechanism for embedding one
       diagram inside another at a given position/size; no rasterization
       needed to compose them."""
-    cell_w = max(w for _, w, _, _, _ in panels) + gap
-    caption_lines = [_wrap_caption(caption, cell_w) for _, _, _, caption, _ in panels]
+    cell_w = max(w for _, w, _, _, _, _ in panels) + gap
+    caption_lines = [_wrap_caption(caption, cell_w) for _, _, _, caption, _, _ in panels]
     caption_height = max(len(lines) for lines in caption_lines) * CAPTION_LINE_HEIGHT + 6
-    cell_h = max(h for _, _, h, _, _ in panels) + gap + caption_height
+    cell_h = max(h for _, _, h, _, _, _ in panels) + gap + caption_height
     nrows = -(-len(panels) // ncols)
 
     root = ET.Element(f"{{{SVG_NS}}}svg", {
         "width": str(ncols * cell_w), "height": str(nrows * cell_h),
     })
-    for i, ((panel, w, h, _, sprinzl), lines) in enumerate(zip(panels, caption_lines)):
+    for i, ((panel, w, h, _, sprinzl, region), lines) in enumerate(zip(panels, caption_lines)):
         row, col = divmod(i, ncols)
         x = col * cell_w + (cell_w - w) / 2
         y = row * cell_h + caption_height
@@ -248,7 +248,7 @@ def _grid_svg(panels, ncols, gap=20):
                 "text-anchor": "middle",
             })
             text.text = line
-        _inject_sprinzl_labels(panel, sprinzl)
+        _inject_sprinzl_labels(panel, sprinzl, region)
         _flip_panel_north(panel, w, h)
         panel.set("x", str(x))
         panel.set("y", str(y))
@@ -291,7 +291,8 @@ def make_plot(records, out_path, r2dt_image=R2DT_DEFAULT_IMAGE, ncols=6):
                 continue
             root = ET.parse(candidates[0]).getroot()
             width, height = float(root.get("width")), float(root.get("height"))
-            panels.append((root, width, height, f"{r['header']}\n{r['summary']}", r["sprinzl"]))
+            caption = f"{r['header'].split(None, 1)[0]}\n{r['summary']}"
+            panels.append((root, width, height, caption, r["sprinzl"], r["region"]))
 
         if not panels:
             logger.warning("R2DT plotting produced no SVG output")
@@ -345,9 +346,10 @@ def _convert_svg(svg_path, out_path, ext):
 
 def _records_from_tsv(tsv_path):
     """group a sprinx TSV's per-position rows back into per-record dicts:
-    header, seq, ss, summary, sprinzl, cm_only_ss, rnafold_only_ss. a record
-    with no rows in the TSV at all (sprinx skipped it upstream) is simply
-    absent here, matching the original in-process filtering on empty rows."""
+    header, seq, ss, summary, sprinzl, region, cm_only_ss, rnafold_only_ss. a
+    record with no rows in the TSV at all (sprinx skipped it upstream) is
+    simply absent here, matching the original in-process filtering on empty
+    rows."""
     df = pd.read_csv(tsv_path, sep="\t", keep_default_na=False)
     records = []
     for seq_id, group in df.groupby("seq_id", sort=False):
@@ -363,6 +365,8 @@ def _records_from_tsv(tsv_path):
             "summary": f"CM:{cm_used}" + (" [rerouted]" if rerouted else ""),
             "sprinzl": {int(i): label for i, label in
                         zip(group["seq_index"], group["sprinzl_position"]) if label},
+            "region": {int(i): r for i, r in
+                       zip(group["seq_index"], group["region"])},
             "cm_only_ss": "".join(cm_only_col) if (cm_only_col != "").all() else None,
             "rnafold_only_ss": "".join(rnafold_only_col) if (rnafold_only_col != "").all() else None,
         })
