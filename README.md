@@ -351,11 +351,6 @@ data/
                                 source of real sequences in integration tests
     TRNAinf-euk.cm               eukaryotic whole-family CM; used by test_sprinx_integration.py
                                 via SPRINX_CANONICAL_CM in .env, not by --scheme mito's default
-    mitofinder_models/          symlink to canonical CMs from MitoFinder, old INFERNAL-1 [1.0]
-                                format; cmalign (Infernal 1.1.x) refuses these outright, so
-                                nothing reads this path - kept only as the historical source
-                                the bundled mito_cm/canonical/mitofinder_models/ CMs were
-                                converted from (see src/sprinx/data/ above)
     combined.cm*                 not read by any code path. kept deliberately, not clutter:
                                 reproduces the cmscan exploration described in "Why not just
                                 pick the best-scoring model?" above (built via `cmpress` on
