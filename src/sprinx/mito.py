@@ -84,22 +84,21 @@ import RNA
 from loguru import logger
 
 from sprinx.common import (
+    SPRINZL_REGION,
+    _configure_logging,
+    _forgi_stem_groups,
+    _pick_by_anticodon_anchor,
+    _scan_cm_files,
     aa_field_to_cm_code,
     cmalign_one,
     finalize_structure,
-    find_cm_files,
+    find_anticodon_stem_index,
     get_stem_loop_elements,
-    _forgi_stem_groups,
-    package_data_path,
-    _pick_by_anticodon_anchor,
-    _scan_cm_files,
     header_to_aa,
     header_to_anticodon,
-    SPRINZL_REGION,
+    package_data_path,
     sprinzl_map,
     stem_complementarity,
-    find_anticodon_stem_index,
-    _configure_logging,
 )
 
 
@@ -108,14 +107,17 @@ def default_canonical_cm_sources():
     first, then a per-AA metazoan directory. covers metazoan mitochondrial
     tRNAs; a different clade needs its own CMs supplied via --canonical-cm."""
     canonical_dir = package_data_path("mito_cm", "canonical")
-    return [os.path.join(canonical_dir, "TRNAinf-bact.cm"),
-            os.path.join(canonical_dir, "mitofinder_models")]
+    return [
+        os.path.join(canonical_dir, "TRNAinf-bact.cm"),
+        os.path.join(canonical_dir, "mitofinder_models"),
+    ]
 
 
 def default_armless_cm_dir():
     """bundled default --armless-cm-dir: armless_trn{AA}_wo_{d,t,d_and_t}.cm
     files (Ozerova et al. 2024)."""
     return package_data_path("mito_cm", "armless")
+
 
 # anticodon arm is the 2nd inner stem-loop (0-indexed) in a canonical cloverleaf;
 # topological fact, not tunable; changing it requires a different CM.
@@ -127,8 +129,12 @@ ARMLESS_CM_RE = re.compile(r"armless_trn(\w+)_wo_(d_and_t|d|t)\.cm$")
 
 def index_armless_cms(cm_dir):
     """scan cm_dir for armless_trn{AA}_wo_{arm}.cm files; return {(aa, arm): path}."""
-    index = _scan_cm_files(cm_dir, ARMLESS_CM_RE, lambda m: (m.group(1), m.group(2)), "armless")
-    logger.info(f"indexed {len(index)} armless CMs: {sorted(f'{aa}/{arm}' for aa, arm in index)}")
+    index = _scan_cm_files(
+        cm_dir, ARMLESS_CM_RE, lambda m: (m.group(1), m.group(2)), "armless"
+    )
+    logger.info(
+        f"indexed {len(index)} armless CMs: {sorted(f'{aa}/{arm}' for aa, arm in index)}"
+    )
     return index
 
 
@@ -143,8 +149,14 @@ def index_canonical_cms(cm_dir):
     are excluded even though they also match the generic {x}_{y}.cm shape. if
     the same AA code appears under multiple files, the last one found wins and
     a warning is logged, since this silently picks one label/clade over another."""
-    index = _scan_cm_files(cm_dir, CANONICAL_CM_RE, lambda m: m.group(1), "canonical",
-                           exclude=ARMLESS_CM_RE, warn_on_conflict=True)
+    index = _scan_cm_files(
+        cm_dir,
+        CANONICAL_CM_RE,
+        lambda m: m.group(1),
+        "canonical",
+        exclude=ARMLESS_CM_RE,
+        warn_on_conflict=True,
+    )
     logger.info(f"indexed {len(index)} canonical CMs by aa: {sorted(index)}")
     return index
 
@@ -165,13 +177,18 @@ def _resolve_canonical_for_tier(header, seq, tier):
         return None
     if aa_code in tier:
         return tier[aa_code]
-    candidates = [path for code, path in tier.items()
-                  if code.rstrip("0123456789") == aa_code.rstrip("0123456789")]
+    candidates = [
+        path
+        for code, path in tier.items()
+        if code.rstrip("0123456789") == aa_code.rstrip("0123456789")
+    ]
     if not candidates:
         return None
     if len(candidates) == 1:
         return candidates[0]
-    return _pick_by_anticodon_anchor(header, seq, header_to_anticodon(header), candidates)
+    return _pick_by_anticodon_anchor(
+        header, seq, header_to_anticodon(header), candidates
+    )
 
 
 # --- structural arm-loss detection
@@ -208,8 +225,9 @@ MIN_COMPATIBLE_PAIRS = 2
 ANTICODON_STEM_PAIRS = 5
 
 
-def classify_arm_loss(header, aligned_seq, ss_cons,
-                      expected_anticodon_index=EXPECTED_ANTICODON_STEM_INDEX):
+def classify_arm_loss(
+    header, aligned_seq, ss_cons, expected_anticodon_index=EXPECTED_ANTICODON_STEM_INDEX
+):
     """Top-level structural diagnosis for one cmalign'd sequence: which arm is
     missing.
 
@@ -224,14 +242,20 @@ def classify_arm_loss(header, aligned_seq, ss_cons,
     anticodon = header_to_anticodon(header)
     elements = get_stem_loop_elements(ss_cons)
     n = len(elements)
-    idx, method = find_anticodon_stem_index(aligned_seq, elements, anticodon)
+    idx, method = find_anticodon_stem_index(
+        aligned_seq, elements, anticodon, expected_index=expected_anticodon_index
+    )
     per_stem = [stem_complementarity(aligned_seq, ss_cons, e) for e in elements]
 
     result = {
-        "anticodon": anticodon, "n_stem_loops": n,
-        "anticodon_stem_index": idx, "anticodon_search_method": method,
-        "register_offset": None, "per_stem_complementarity": per_stem,
-        "call": "UNRESOLVED", "missing_arm": None,
+        "anticodon": anticodon,
+        "n_stem_loops": n,
+        "anticodon_stem_index": idx,
+        "anticodon_search_method": method,
+        "register_offset": None,
+        "per_stem_complementarity": per_stem,
+        "call": "UNRESOLVED",
+        "missing_arm": None,
     }
 
     def absent(i):
@@ -243,7 +267,10 @@ def classify_arm_loss(header, aligned_seq, ss_cons,
         it's an OR of the two negated conditions: failing either one alone is
         enough to call the arm absent."""
         stem = per_stem[i]
-        return stem["n_pairs"] < MIN_STEM_PAIRS or stem["n_compatible"] < MIN_COMPATIBLE_PAIRS
+        return (
+            stem["n_pairs"] < MIN_STEM_PAIRS
+            or stem["n_compatible"] < MIN_COMPATIBLE_PAIRS
+        )
 
     if idx is None:
         # anticodon didn't anchor (ambiguous AT-rich anticodon): fallback scan.
@@ -327,10 +354,16 @@ def _widen_arm_span(ss_cons, elements, idx):
     spurious hairpin out of unrelated linker sequence."""
     groups = _forgi_stem_groups(ss_cons)
     acceptor = next(g for g in groups if not g["loop_cols"])
-    start = (elements[idx - 1]["stem3_cols"][-1] + 1 if idx > 0
-             else max(acceptor["stem5_cols"]) + 1)
-    end = (elements[idx + 1]["stem5_cols"][0] if idx + 1 < len(elements)
-           else min(acceptor["stem3_cols"]))
+    start = (
+        elements[idx - 1]["stem3_cols"][-1] + 1
+        if idx > 0
+        else max(acceptor["stem5_cols"]) + 1
+    )
+    end = (
+        elements[idx + 1]["stem5_cols"][0]
+        if idx + 1 < len(elements)
+        else min(acceptor["stem3_cols"])
+    )
     return start, end
 
 
@@ -403,7 +436,9 @@ def patch_threading_failure_arm(header, aligned_seq, final_seq, final_ss, elem):
 
     Returns: patched final_ss, or the original final_ss if there's no fold
     or the result is unbalanced (safety net)."""
-    ungapped_positions, arm_ss = _arm_full_span_subseq_and_fold(aligned_seq, final_seq, elem)
+    ungapped_positions, arm_ss = _arm_full_span_subseq_and_fold(
+        aligned_seq, final_seq, elem
+    )
 
     if ungapped_positions is None or "(" not in arm_ss:
         return final_ss
@@ -418,7 +453,7 @@ def patch_threading_failure_arm(header, aligned_seq, final_seq, final_ss, elem):
         partner = pt[pos + 1] - 1
         if partner >= 0 and partner not in span:
             cleared_external.append(partner)
-            ss_list[partner] = "."   # would otherwise dangle once span is cleared
+            ss_list[partner] = "."  # would otherwise dangle once span is cleared
         ss_list[pos] = "."
 
     if overridden or cleared_external:
@@ -429,9 +464,12 @@ def patch_threading_failure_arm(header, aligned_seq, final_seq, final_ss, elem):
             f"old={old_span!r} -> new={arm_ss!r}; "
             f"{len(overridden)} bracket(s) inside the span replaced "
             f"({overridden}); "
-            + (f"{len(cleared_external)} bracket(s) outside the span also cleared "
-               f"to avoid dangling ({cleared_external})" if cleared_external
-               else "none outside the span affected")
+            + (
+                f"{len(cleared_external)} bracket(s) outside the span also cleared "
+                f"to avoid dangling ({cleared_external})"
+                if cleared_external
+                else "none outside the span affected"
+            )
         )
 
     for i, ungapped_pos in enumerate(ungapped_positions):
@@ -455,8 +493,10 @@ def resolve_armless_cm(header, seq, aa_code, missing_arm, anticodon, armless_cm_
     if aa_code is None:
         return None
     candidates = [
-        path for (code, arm), path in armless_cm_index.items()
-        if arm == missing_arm and code.rstrip("0123456789") == aa_code.rstrip("0123456789")
+        path
+        for (code, arm), path in armless_cm_index.items()
+        if arm == missing_arm
+        and code.rstrip("0123456789") == aa_code.rstrip("0123456789")
     ]
     if not candidates:
         return None
@@ -465,11 +505,18 @@ def resolve_armless_cm(header, seq, aa_code, missing_arm, anticodon, armless_cm_
     return _pick_by_anticodon_anchor(header, seq, anticodon, candidates)
 
 
-def _routing_result(final_alignment, cm_used, diagnosis, rerouted=False, threading_failure_elem=None):
+def _routing_result(
+    final_alignment, cm_used, diagnosis, rerouted=False, threading_failure_elem=None
+):
     """assemble the dict select_cm_and_align returns at each of its exit points,
     so the shape is defined once instead of copy-pasted per branch."""
-    return {"final_alignment": final_alignment, "cm_used": cm_used, "diagnosis": diagnosis,
-            "rerouted": rerouted, "threading_failure_elem": threading_failure_elem}
+    return {
+        "final_alignment": final_alignment,
+        "cm_used": cm_used,
+        "diagnosis": diagnosis,
+        "rerouted": rerouted,
+        "threading_failure_elem": threading_failure_elem,
+    }
 
 
 def select_cm_and_align(header, seq, canonical_cm_tiers, armless_cm_index):
@@ -480,7 +527,12 @@ def select_cm_and_align(header, seq, canonical_cm_tiers, armless_cm_index):
        (module docstring section 1).
        - Among tiers that anchor the anticodon, pick the one with the
          highest total base-pairing evidence summed across all stems
-         (per_stem_complementarity's n_pairs). Ties keep the earlier tier.
+         (per_stem_complementarity's n_pairs). On a tie, prefer whichever
+         tier anchored by directly matching the anticodon in one loop over
+         one that only anchored by assuming its position, since a tier
+         modeling an extra, here-empty stem-loop can otherwise tie a
+         cleaner tier's total_pairs. A further tie (both anchored by
+         position) keeps the earlier tier - not yet seen in practice.
        - Example: mt-Cys, TRNAinf-bact.cm threads 3/5 anticodon pairs,
          Metazoa_C.cm threads 5/5 for the identical sequence - the fuller
          thread wins.
@@ -509,19 +561,23 @@ def select_cm_and_align(header, seq, canonical_cm_tiers, armless_cm_index):
     if isinstance(canonical_cm_tiers, (str, dict)):
         canonical_cm_tiers = [canonical_cm_tiers]
 
-    canonical_alignment = canonical_cm = diagnosis = best_total_pairs = None
-    first_alignment = first_cm = first_diag = None  # ultimate fallback: no tier ever anchors
+    canonical_alignment = canonical_cm = diagnosis = best_key = None
+    first_alignment = first_cm = first_diag = (
+        None  # ultimate fallback: no tier ever anchors
+    )
     for tier in canonical_cm_tiers:
         path = _resolve_canonical_for_tier(header, seq, tier)
         if path is None:
-            logger.info(f"{header}: skipping a canonical CM tier: no CM for this amino acid there")
+            logger.info(
+                f"{header}: skipping a canonical CM tier: no CM for this amino acid there"
+            )
             continue
         aln = cmalign_one(header, seq, path)
         if aln is None:
             logger.info(f"{header}: skipping a canonical CM tier: alignment failed")
             continue
         diag = classify_arm_loss(header, aln["aligned_seq"], aln["ss_cons"])
-        if first_alignment is None:                    # ultimate fallback if nothing ever anchors
+        if first_alignment is None:  # ultimate fallback if nothing ever anchors
             first_alignment, first_cm, first_diag = aln, path, diag
         idx = diag["anticodon_stem_index"]
         if idx is None:
@@ -534,12 +590,25 @@ def select_cm_and_align(header, seq, canonical_cm_tiers, armless_cm_index):
             continue
 
         total_pairs = sum(stem["n_pairs"] for stem in diag["per_stem_complementarity"])
-        logger.debug(f"{header}: tier {path} anchors anticodon, total stem pairs={total_pairs}")
-        if canonical_alignment is None or total_pairs > best_total_pairs:
-            canonical_alignment, canonical_cm, diagnosis, best_total_pairs = aln, path, diag, total_pairs
+        direct_match = diag["anticodon_search_method"] == "unique_loop_match"
+        key = (total_pairs, direct_match)
+        logger.debug(
+            f"{header}: tier {path} anchors anticodon, total stem pairs={total_pairs}"
+        )
+        if canonical_alignment is None or key > best_key:
+            canonical_alignment, canonical_cm, diagnosis, best_key = (
+                aln,
+                path,
+                diag,
+                key,
+            )
 
     if canonical_alignment is None:
-        canonical_alignment, canonical_cm, diagnosis = first_alignment, first_cm, first_diag
+        canonical_alignment, canonical_cm, diagnosis = (
+            first_alignment,
+            first_cm,
+            first_diag,
+        )
     if canonical_alignment is None:
         return _routing_result(None, None, None)
 
@@ -568,9 +637,13 @@ def select_cm_and_align(header, seq, canonical_cm_tiers, armless_cm_index):
 
         # detection stays on elem's own narrow span; only the confirmed
         # patch's fold gets widened (see _widen_arm_span).
-        if elem and arm_span_has_enough_sequence(canonical_alignment["aligned_seq"], elem):
+        if elem and arm_span_has_enough_sequence(
+            canonical_alignment["aligned_seq"], elem
+        ):
             final_seq, _ = finalize_structure(canonical_alignment)
-            if arm_is_threading_failure(canonical_alignment["aligned_seq"], final_seq, elem):
+            if arm_is_threading_failure(
+                canonical_alignment["aligned_seq"], final_seq, elem
+            ):
                 widened = _widen_arm_span(canonical_alignment["ss_cons"], elements, idx)
                 wide_elem = dict(elem, span=widened)
                 logger.info(
@@ -580,33 +653,46 @@ def select_cm_and_align(header, seq, canonical_cm_tiers, armless_cm_index):
                     f"  aligned_seq={canonical_alignment['aligned_seq']}\n"
                     f"  ss_cons={canonical_alignment['ss_cons']}"
                 )
-                return _routing_result(canonical_alignment, canonical_cm, diagnosis,
-                                        threading_failure_elem=wide_elem)
+                return _routing_result(
+                    canonical_alignment,
+                    canonical_cm,
+                    diagnosis,
+                    threading_failure_elem=wide_elem,
+                )
 
     # arm loss: reroute
-    logger.info(f"{header}: {missing_arm}-arm missing against {canonical_cm} "
-               f"({diagnosis['call']}), looking for an armless CM to reroute to\n"
-               f"  aligned_seq={canonical_alignment['aligned_seq']}\n"
-               f"  ss_cons={canonical_alignment['ss_cons']}")
+    logger.info(
+        f"{header}: {missing_arm}-arm missing against {canonical_cm} "
+        f"({diagnosis['call']}), looking for an armless CM to reroute to\n"
+        f"  aligned_seq={canonical_alignment['aligned_seq']}\n"
+        f"  ss_cons={canonical_alignment['ss_cons']}"
+    )
     aa_code = aa_field_to_cm_code(header_to_aa(header), armless_cm_index.keys())
     anticodon = header_to_anticodon(header)
-    armless_path = resolve_armless_cm(header, seq, aa_code, missing_arm, anticodon, armless_cm_index)
+    armless_path = resolve_armless_cm(
+        header, seq, aa_code, missing_arm, anticodon, armless_cm_index
+    )
 
     if armless_path is None:
-        logger.warning(f"{header}: {missing_arm}-arm missing ({diagnosis['call']}) "
-                       f"but no armless CM for aa_code={aa_code!r}; using canonical")
+        logger.warning(
+            f"{header}: {missing_arm}-arm missing ({diagnosis['call']}) "
+            f"but no armless CM for aa_code={aa_code!r}; using canonical"
+        )
         return _routing_result(canonical_alignment, canonical_cm, diagnosis)
 
     armless_alignment = cmalign_one(header, seq, armless_path)
     if armless_alignment is None:
-        logger.warning(f"{header}: armless CM realignment failed ({armless_path}); "
-                       f"falling back to canonical despite {missing_arm}-arm loss")
+        logger.warning(
+            f"{header}: armless CM realignment failed ({armless_path}); "
+            f"falling back to canonical despite {missing_arm}-arm loss"
+        )
         return _routing_result(canonical_alignment, canonical_cm, diagnosis)
 
     return _routing_result(armless_alignment, armless_path, diagnosis, rerouted=True)
 
 
 # --- per-sequence worker: bundled for multiprocessing.Pool.map ---
+
 
 def process_mito_record(args):
     """worker for one (header, seq) FASTA record, mito path.
@@ -640,12 +726,17 @@ def process_mito_record(args):
         # length, tertiary contacts and modified bases aren't 2D-foldable).
         rnafold_only_ss, _ = RNA.fold_compound(final_seq).mfe()
         final_ss = patch_threading_failure_arm(
-            header, alignment["aligned_seq"], final_seq, final_ss,
-            routing["threading_failure_elem"]
+            header,
+            alignment["aligned_seq"],
+            final_seq,
+            final_ss,
+            routing["threading_failure_elem"],
         )
 
     if len(final_seq) != len(seq):
-        logger.warning(f"{header}: ungapped length {len(final_seq)} != input {len(seq)}, skipped")
+        logger.warning(
+            f"{header}: ungapped length {len(final_seq)} != input {len(seq)}, skipped"
+        )
         return {"header": header, "rows": [], "summary": "LENGTH_MISMATCH"}
 
     anticodon = header_to_anticodon(header)
@@ -657,8 +748,10 @@ def process_mito_record(args):
 
     unlabeled = [i for i in range(len(final_seq)) if i not in sprinzl]
     if unlabeled:
-        logger.warning(f"{header}: {len(unlabeled)} position(s) left without a Sprinzl "
-                       f"number at seq index {unlabeled}; output rows for them are blank")
+        logger.warning(
+            f"{header}: {len(unlabeled)} position(s) left without a Sprinzl "
+            f"number at seq index {unlabeled}; output rows for them are blank"
+        )
 
     cm_name = routing["cm_used"] or "NONE"
     if cm_name not in ("RNAfold", "NONE"):
@@ -668,12 +761,16 @@ def process_mito_record(args):
     logger.debug(f"{header}")
     logger.debug(f"  seq ({len(final_seq)}nt): {final_seq}")
     logger.debug(f"  ss  ({len(final_ss)}nt):  {final_ss}")
-    logger.debug(f"  arm-loss: {diagnosis.get('call')}  "
-                 f"(anchor:{diagnosis.get('anticodon_search_method')}, "
-                 f"offset={diagnosis.get('register_offset')})")
+    logger.debug(
+        f"  arm-loss: {diagnosis.get('call')}  "
+        f"(anchor:{diagnosis.get('anticodon_search_method')}, "
+        f"offset={diagnosis.get('register_offset')})"
+    )
     for i, stem in enumerate(diagnosis.get("per_stem_complementarity", [])):
-        logger.debug(f"    stem[{i}]: n_pairs={stem['n_pairs']} "
-                     f"n_compatible={stem['n_compatible']}")
+        logger.debug(
+            f"    stem[{i}]: n_pairs={stem['n_pairs']} "
+            f"n_compatible={stem['n_compatible']}"
+        )
     if routing.get("threading_failure_elem"):
         logger.debug(f"  threading failure: patched via RNAfold; ss: {final_ss}")
     if routing["rerouted"]:
@@ -688,27 +785,40 @@ def process_mito_record(args):
         # the digits so an overflow-suffixed one (e17A) still resolves to its
         # base code (e17) for the region lookup, same as '60A' -> '60' does.
         region_key = re.match(r"e?\d+", label).group() if label else ""
-        rows.append({
-            "seq_id": header, "seq_index": i, "nucleotide": base,
-            "sprinzl_position": label, "region": SPRINZL_REGION.get(region_key, ""),
-            "cm_used": cm_name, "rerouted": routing["rerouted"],
-            "arm_loss_call": diagnosis.get("call"),
-            # dot-bracket symbol at this position; carries final_ss into the
-            # TSV so scripts/visualize_ss.py can rebuild structure per record
-            # without re-running cmalign (see module docstring, section 4).
-            "structure": final_ss[i],
-            # pre-patch CM structure and naive whole-sequence RNAfold structure,
-            # same indices as final_ss (patching replaces characters in place,
-            # never changes length); blank when this record wasn't a threading
-            # failure, matching cm_only_ss/rnafold_only_ss being None there.
-            "cm_only_structure": cm_only_ss[i] if cm_only_ss else "",
-            "rnafold_only_structure": rnafold_only_ss[i] if rnafold_only_ss else "",
-        })
+        rows.append(
+            {
+                "seq_id": header,
+                "seq_index": i,
+                "nucleotide": base,
+                "sprinzl_position": label,
+                "region": SPRINZL_REGION.get(region_key, ""),
+                "cm_used": cm_name,
+                "rerouted": routing["rerouted"],
+                "arm_loss_call": diagnosis.get("call"),
+                # dot-bracket symbol at this position; carries final_ss into the
+                # TSV so scripts/visualize_ss.py can rebuild structure per record
+                # without re-running cmalign (see module docstring, section 4).
+                "structure": final_ss[i],
+                # pre-patch CM structure and naive whole-sequence RNAfold structure,
+                # same indices as final_ss (patching replaces characters in place,
+                # never changes length); blank when this record wasn't a threading
+                # failure, matching cm_only_ss/rnafold_only_ss being None there.
+                "cm_only_structure": cm_only_ss[i] if cm_only_ss else "",
+                "rnafold_only_structure": rnafold_only_ss[i] if rnafold_only_ss else "",
+            }
+        )
 
     logger.info(f"{header}: {summary}  [{diagnosis.get('call')}]")
-    return {"header": header, "rows": rows, "summary": summary,
-            "seq": final_seq, "ss": final_ss, "sprinzl": sprinzl,
-            "cm_only_ss": cm_only_ss, "rnafold_only_ss": rnafold_only_ss}
+    return {
+        "header": header,
+        "rows": rows,
+        "summary": summary,
+        "seq": final_seq,
+        "ss": final_ss,
+        "sprinzl": sprinzl,
+        "cm_only_ss": cm_only_ss,
+        "rnafold_only_ss": rnafold_only_ss,
+    }
 
 
 # =============================================================================

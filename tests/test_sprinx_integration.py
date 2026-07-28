@@ -330,17 +330,63 @@ def test_tier_prefers_fuller_anticodon_stem_thread_over_first_anchor():
 
 @need_mito_tiered
 def test_tiered_canonical_falls_back_to_bacterial():
-    """S. cerevisiae mt-Tyr has a long variable loop Metazoa_Y.cm can't model
-    (anchoring fails); given [Metazoa_Y, TRNAinf-bact] the bacterial tier is used."""
+    """for this S. cerevisiae mt-Tyr sequence, Metazoa_Y.cm aligns the region
+    between the anticodon arm and T-arm as a single unpaired run, with no
+    distinct stem-loop there. TRNAinf-bact.cm threads that same region as a
+    paired stem with WC/wobble complementarity. given [Metazoa_Y,
+    TRNAinf-bact], the bacterial tier wins on total stem evidence - both
+    tiers anchor the anticodon (positional tiebreak, see
+    find_anticodon_stem_index), so the win comes from stem completeness,
+    not from Metazoa_Y failing to anchor at all."""
     header = "mtdbD00125566|Tyr|GUA|Saccharomyces cerevisiae"
     seq = ("GGAGGGAUUUUCAAUGUUGGUAGUUGGAGUUGAGCUGUAAACUCAAUGACUUAGGUCUU"
            "CAUAGGUUCAAUUCCUAUUCCCUUCA")
-    # sanity: the metazoan tier alone must NOT anchor (else the fallback is moot)
-    assert mito.select_cm_and_align(header, seq, MITO_METAZOA_Y_CM, {})["diagnosis"][
-        "anticodon_stem_index"] is None
+
+    metazoa_only = mito.select_cm_and_align(header, seq, MITO_METAZOA_Y_CM, {})
+    metazoa_elements = common.get_stem_loop_elements(metazoa_only["final_alignment"]["ss_cons"])
+    assert len(metazoa_elements) == 3, "D-arm, anticodon-arm, T-arm only: no separate V-arm stem-loop"
+
+    bact_only = mito.select_cm_and_align(header, seq, MITO_BACT_CM, {})
+    bact_elements = common.get_stem_loop_elements(bact_only["final_alignment"]["ss_cons"])
+    assert len(bact_elements) == 4, "D-arm, anticodon-arm, V-arm, T-arm: bact.cm models a distinct V-arm stem"
+    v_arm = common.stem_complementarity(
+        bact_only["final_alignment"]["aligned_seq"], bact_only["final_alignment"]["ss_cons"], bact_elements[2])
+    assert v_arm["n_pairs"] > 0 and v_arm["n_compatible"] > 0
+
     routing = mito.select_cm_and_align(header, seq, [MITO_METAZOA_Y_CM, MITO_BACT_CM], {})
     assert routing["diagnosis"]["anticodon_stem_index"] is not None
     assert os.path.basename(routing["cm_used"]) == "TRNAinf-bact.cm"
+
+
+@need_mito_tiered
+def test_positional_tiebreak_yields_complete_canonical_labeling():
+    """this N. tabacum plastid Thr sequence's anticodon (GGU) also occurs,
+    by coincidence, in its D-loop. against TRNAinf-bact.cm that gives 2 loop
+    matches, which find_anticodon_stem_index can't resolve on content
+    alone. with 4 stem-loops present (D, anticodon, V, T), position 1 is
+    unambiguous regardless of coincidental content, so the anticodon
+    anchors, and the full downstream Sprinzl assignment comes out complete:
+    a real 7bp acceptor stem, every position labeled, anticodon at 34-36."""
+    header = "NtK326-Chl-tRNA-Thr-GGT-1-1-NC_001879:33186-33257 (+) 72 bp Sc:58.2 -"
+    seq = "GCCCUUUUAACUCAGUGGUAGAGUAACGCCAUGGUAAGGCGUAAGUCAUCGGUUCAAAUCCGAUAAGGGGCU"
+
+    aln = common.cmalign_one(header, seq, MITO_BACT_CM)
+    elements = common.get_stem_loop_elements(aln["ss_cons"])
+    assert common.find_anticodon_stem_index(aln["aligned_seq"], elements, "GGU") == (
+        None, "ambiguous_2_loop_matches")
+
+    routing = mito.select_cm_and_align(header, seq, MITO_BACT_CM, {})
+    diag = routing["diagnosis"]
+    assert diag["anticodon_stem_index"] == 1
+    assert not routing["rerouted"]
+
+    final_seq, final_ss = common.finalize_structure(routing["final_alignment"])
+    sprinzl = common.sprinzl_map(final_ss, final_seq, "GGU", diag["missing_arm"])
+    assert [i for i in range(len(final_seq)) if i not in sprinzl] == []
+    assert [sprinzl[i] for i in range(7)] == ["1", "2", "3", "4", "5", "6", "7"]
+    got_anticodon = "".join(final_seq[i] for i in sorted(sprinzl)
+                            if sprinzl[i] in ("34", "35", "36"))
+    assert got_anticodon == "GGU"
 
 
 need_mito_bact_armless = pytest.mark.skipif(

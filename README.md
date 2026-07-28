@@ -135,6 +135,15 @@ available after a plain `pip install`:
   via `--canonical-cm`/`--armless-cm-dir` (see below for the expected shape).
   See "Why not just pick the best-scoring model?" below for why order, not
   score, decides between multiple `--canonical-cm` sources.
+  - For plant tRNAs (plastid or mitochondrial), add a eukaryotic CM as a
+    middle tier, between the bacterial and metazoan defaults:
+    ```bash
+    sprinx --scheme mito --fasta plant_trnas.fa \
+      --canonical-cm src/sprinx/data/mito_cm/canonical/TRNAinf-bact.cm \
+                      data/mito/TRNAinf-euk.cm \
+                      src/sprinx/data/mito_cm/canonical/mitofinder_models \
+      --out sprinzl_mapping.tsv
+    ```
 - **`--scheme euk`/`arch`/`bact`** defaults to that domain's combined
   per-isotype CM database (tRNAscan-SE), one CM per amino acid. These aren't
   clade- or organism-specific, so no override is normally needed; use

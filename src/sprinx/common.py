@@ -400,11 +400,18 @@ def get_stem_loop_elements(ss):
     return [g for g in _forgi_stem_groups(ss) if g["loop_cols"]]
 
 
-def find_anticodon_stem_index(aligned_seq, stem_loop_elements, anticodon):
+def find_anticodon_stem_index(aligned_seq, stem_loop_elements, anticodon, expected_index=None):
     """search for anticodon within each stem-loop's hairpin-loop columns only.
     both '-' and '.' must be stripped from loop sequences together; filtering
     only '-' can leave insert-column junk that produces a spurious extra match,
     breaking the "exactly one loop" assumption.
+
+    expected_index breaks a tie between >=2 content matches, but only with
+    >=3 stem-loops total: position alone identifies the arm there (D-arm
+    first, anticodon-arm second), regardless of coincidental sequence
+    matches elsewhere. with exactly 2 stem-loops it can't, since either one
+    could be the arm that's missing.
+
     returns (index, method) or (None, reason_string) on no/ambiguous match."""
     if anticodon is None:
         return None, "no_anticodon_in_header"
@@ -418,6 +425,9 @@ def find_anticodon_stem_index(aligned_seq, stem_loop_elements, anticodon):
         return candidates[0], "unique_loop_match"
     if not candidates:
         return None, "no_loop_match"
+    if (expected_index is not None and len(stem_loop_elements) >= 3
+            and expected_index in candidates):
+        return expected_index, f"positional_tiebreak_ambiguous_{len(candidates)}_loop_matches"
     return None, f"ambiguous_{len(candidates)}_loop_matches"
 
 
