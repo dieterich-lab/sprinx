@@ -268,7 +268,8 @@ package. R2DT needs a Singularity image, which is heavy and unnecessary for
 anything just consuming sprinx's TSV output, e.g. QutRNA2:
 
 ```bash
-python scripts/visualize_ss.py --tsv sprinzl_mapping.tsv --out cloverleaves.png
+python scripts/visualize_ss.py --tsv sprinzl_mapping.tsv --out cloverleaves.png \
+        --r2dt-image <path-to-singularity-image-of-r2dt>
 ```
 
 It draws one 2D diagram per sequence via R2DT, stitched into a single file:
