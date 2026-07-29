@@ -97,7 +97,7 @@ from sprinx.common import (
     header_to_aa,
     header_to_anticodon,
     package_data_path,
-    sprinzl_map,
+    sprinzl_map_from_alignment,
     stem_complementarity,
 )
 
@@ -744,7 +744,13 @@ def process_mito_record(args):
         logger.warning(f"{header}: no anticodon in header; C-stem location unreliable")
 
     diagnosis = routing["diagnosis"] or {}
-    sprinzl = sprinzl_map(final_ss, final_seq, anticodon, diagnosis.get("missing_arm"))
+    elem = routing.get("threading_failure_elem")
+    # the patched arm's structure is RNAfold's, not cmalign's - its raw
+    # columns carry no trustworthy match/insert-state signal, so that span
+    # alone falls back to a plain positional zip (see distrust_span).
+    distrust_span = elem["span"] if elem else None
+    sprinzl = sprinzl_map_from_alignment(alignment, anticodon, diagnosis.get("missing_arm"),
+                                          distrust_span=distrust_span)
 
     unlabeled = [i for i in range(len(final_seq)) if i not in sprinzl]
     if unlabeled:
