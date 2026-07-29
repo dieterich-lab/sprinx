@@ -97,6 +97,7 @@ from sprinx.common import (
     header_to_aa,
     header_to_anticodon,
     package_data_path,
+    slide_stems_to_improve_pairing,
     sprinzl_map,
     stem_complementarity,
 )
@@ -704,7 +705,7 @@ def process_mito_record(args):
     - per-tier canonical CM resolution (which .cm path applies to this aa,
       if any) happens inside select_cm_and_align; see
       _resolve_canonical_for_tier."""
-    header, seq, canonical_cm_tiers, armless_cm_index, debug = args
+    header, seq, canonical_cm_tiers, armless_cm_index, debug, wc = args
     seq = seq.upper().replace("T", "U")
 
     if debug:
@@ -744,6 +745,11 @@ def process_mito_record(args):
         logger.warning(f"{header}: no anticodon in header; C-stem location unreliable")
 
     diagnosis = routing["diagnosis"] or {}
+    if wc:
+        final_ss = slide_stems_to_improve_pairing(
+            final_seq, final_ss, anticodon, diagnosis.get("missing_arm"), header
+        )
+
     sprinzl = sprinzl_map(final_ss, final_seq, anticodon, diagnosis.get("missing_arm"))
 
     unlabeled = [i for i in range(len(final_seq)) if i not in sprinzl]

@@ -845,3 +845,76 @@ def _fill_stem_bulges(labels, ss, strands):
             next_ord[last_label] = n + 1
             letter = chr(ord("A") + n) if n < 26 else f"A{chr(ord('A') + n - 26)}"
             labels[i] = f"{last_label}{letter}"
+
+
+# --- stem register correction (--wc) ---
+
+# a helix seated more than 2 positions off is a threading failure, handled by
+# mito's RNAfold patch instead
+MAX_STEM_SLIDE = 2
+
+SLIDE_OFFSETS = sorted([d for d in range(-MAX_STEM_SLIDE, MAX_STEM_SLIDE + 1) if d],
+                       key=lambda d: (abs(d), d))
+
+
+def _stem_pairs(ss, group):
+    """(5' col, 3' col) for each paired column of one stem group, read from the
+    pair table so a merged stem with a bulge keeps its true partners."""
+    pt = RNA.ptable(ss)
+    return [(i, pt[i + 1] - 1) for i in group["stem5_cols"] if pt[i + 1] > i + 1]
+
+
+def _pair_cols(pairs):
+    return {col for pair in pairs for col in pair}
+
+
+def _count_wc(seq, pairs):
+    return sum(1 for i, j in pairs if (seq[i], seq[j]) in WC_PAIRS)
+
+
+def slide_stems_to_improve_pairing(seq, ss, anticodon, missing_arm=None, header=""):
+    """re-seat stems that pair better one or two positions along; returns the
+    corrected dot-bracket structure.
+
+    Both strands move by one offset, so a stem keeps its length, bulges and
+    loop and only changes position. A slide needs a strict gain in WC/wobble
+    pairs, takes the smallest offset that gives one, and may not land on
+    another stem's columns. The acceptor and anticodon stems stay put, since
+    the rest of the numbering is anchored to them.
+
+    Human MT-TS1 motivates this: every canonical CM in the library seats its
+    D-stem with two mismatched pairs, one base off a fully paired register."""
+    topo = parse_topology(ss)
+    arms = locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm)
+    frozen = set(topo["acceptor_5"] + topo["acceptor_3"] + arms["c_stem5"] + arms["c_stem3"])
+
+    groups = _forgi_stem_groups(ss)
+    owned = {c for g in groups for c in g["stem5_cols"] + g["stem3_cols"]}
+
+    moves = []
+    for group in groups:
+        pairs = _stem_pairs(ss, group)
+        cols = _pair_cols(pairs)
+        if not pairs or cols & frozen:
+            continue
+        blocked = owned - cols
+        for offset in SLIDE_OFFSETS:
+            moved = [(i + offset, j + offset) for i, j in pairs]
+            new_cols = _pair_cols(moved)
+            if min(new_cols) < 0 or max(new_cols) >= len(seq) or new_cols & blocked:
+                continue
+            if _count_wc(seq, moved) > _count_wc(seq, pairs):
+                moves.append((pairs, moved))
+                break
+
+    out = list(ss)
+    for pairs, moved in moves:
+        logger.info(f"{header}: re-seated a stem by {moved[0][0] - pairs[0][0]:+d} "
+                    f"({_count_wc(seq, pairs)} -> {_count_wc(seq, moved)} of "
+                    f"{len(pairs)} pairs complementary)")
+        for i, j in pairs:
+            out[i] = out[j] = "."
+    for _, moved in moves:
+        for i, j in moved:
+            out[i], out[j] = "(", ")"
+    return "".join(out)
