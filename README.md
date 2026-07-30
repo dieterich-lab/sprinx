@@ -58,8 +58,8 @@ QuTRNA2's `seq_to_sprinzl.tsv` format, and a PNG of the 2D structures. The
 default bundled CMs cover bacterial & metazoan mt-tRNAs, so no `--canonical-cm`/
 `--armless-cm-dir` is needed here (see "CM files" below to override them).
 This runs as-is from a clone with no extra downloads (assumes the venv above
-is activated, and `cmalign` and an R2DT Singularity image are on `PATH`; see
-"Dependencies not on PyPI" below):
+is activated, `cmalign` is on `PATH`, and R2DT is reachable for the last
+command; see "Dependencies not on PyPI" below):
 
 ```bash
 sprinx --scheme mito --fasta data/mito/canonical.fa --out sprinzl_mapping.tsv
@@ -120,8 +120,9 @@ at the top of [src/sprinx/cyto.py](src/sprinx/cyto.py).
   Python package; install via bioconda, a system package manager, or from
   source. The `ViennaRNA` and `forgi` Python packages sprinx also needs are
   both on PyPI and install automatically with `pip install -e .`.
-- An [R2DT](https://r2dt.bio) Singularity image placed in `lib/r2dt`, only if you use
-  `scripts/visualize_ss.py`.
+- [R2DT](https://r2dt.bio), only if you use `scripts/visualize_ss.py`. Either
+  `r2dt.py` on `PATH`, or a container image run under docker, apptainer, or
+  singularity. See [docs.r2dt.bio](https://docs.r2dt.bio) to obtain it.
 
 ## CM files
 
@@ -264,13 +265,22 @@ would conflict with existing structure is skipped and logged at DEBUG level.
 ### Rendering 2D diagrams
 
 Visualization is a separate standalone script, not part of the installable
-package. R2DT needs a Singularity image, which is heavy and unnecessary for
-anything just consuming sprinx's TSV output, e.g. QutRNA2:
+package. R2DT is a container, which is unnecessary for anything just
+consuming sprinx's TSV output, e.g. QutRNA2. Example usage:
 
 ```bash
+# docker on hand: nothing else to pass
+python scripts/visualize_ss.py --tsv sprinzl_mapping.tsv --out cloverleaves.png
+
+# a container image, e.g. on a cluster with apptainer or singularity
 python scripts/visualize_ss.py --tsv sprinzl_mapping.tsv --out cloverleaves.png \
-        --r2dt-image <path-to-singularity-image-of-r2dt>
+        --r2dt-image /path/to/r2dt.sif
 ```
+
+`--r2dt-runtime` picks how `r2dt.py` is invoked: `auto` (the default) takes
+`r2dt.py` from `PATH` if it is there, else the `--r2dt-image` container, else
+docker with the `rnacentral/r2dt` image. Name a runtime explicitly with
+`docker`, `apptainer`, `singularity`, or `native` to skip that search.
 
 It draws one 2D diagram per sequence via R2DT, stitched into a single file:
 `.svg`, `.png`, or `.pdf`, chosen by the extension on `--out` (R2DT itself
