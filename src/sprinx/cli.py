@@ -97,7 +97,7 @@ def _run_mito(args, records):
                 f"{len(armless_cm_index)} armless CMs available for rerouting, "
                 f"{args.processes} worker process(es)")
 
-    tasks = [(header, seq, canonical_cm_tiers, armless_cm_index, args.debug)
+    tasks = [(header, seq, canonical_cm_tiers, armless_cm_index, args.debug, args.wc)
              for header, seq in records]
     return _run_pool(process_mito_record, tasks, args.processes)
 
@@ -112,7 +112,7 @@ def _run_cyto(args, records):
     logger.info(f"{len(records)} sequences, isotype CM database: {cm_db} "
                 f"({len(isotype_index)} CMs), {args.processes} worker process(es)")
 
-    tasks = [(header, seq, cm_db, isotype_index, args.debug)
+    tasks = [(header, seq, cm_db, isotype_index, args.debug, args.wc)
              for header, seq in records]
     return _run_pool(process_cyto_record, tasks, args.processes)
 
@@ -153,6 +153,11 @@ def main():
                              "without re-running cmalign")
     parser.add_argument("-p", "--processes", type=int, default=4,
                         help="worker processes (default: 4)")
+    parser.add_argument("--wc", action="store_true",
+                        help="re-seat a stem when the same helix pairs better one or two "
+                             "positions along; corrects a CM that threaded a helix onto the "
+                             "wrong bases. only applied on a strict gain in Watson-Crick/wobble "
+                             "pairs, so a well-threaded stem is left alone")
     parser.add_argument("--debug", action="store_true",
                         help="log alignment, arm-loss diagnosis, and CM routing for every sequence")
     args = parser.parse_args()

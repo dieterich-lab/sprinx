@@ -40,6 +40,7 @@ from sprinx.common import (
     header_to_anticodon,
     package_data_path,
     run,
+    slide_stems_to_improve_pairing,
     SPRINZL_REGION,
     sprinzl_map_from_alignment,
 )
@@ -141,7 +142,7 @@ def process_cyto_record(args):
 
     takes a single tuple for Pool.map compatibility. the winning alignment
     goes straight to sprinzl_map_from_alignment, with no arm-loss step of any kind."""
-    header, seq, cm_db_path, isotype_index, debug = args
+    header, seq, cm_db_path, isotype_index, debug, wc = args
     seq = seq.upper().replace("T", "U")
 
     if debug:
@@ -164,7 +165,7 @@ def process_cyto_record(args):
     if anticodon is None:
         logger.warning(f"{header}: no anticodon in header; C-stem location unreliable")
 
-    sprinzl = sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None)
+    sprinzl = sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None, wc=wc)
 
     unlabeled = [i for i in range(len(final_seq)) if i not in sprinzl]
     if unlabeled:

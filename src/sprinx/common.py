@@ -982,11 +982,10 @@ def _assign_plain_zip(labels, cols, core_slots, aligned_seq, raw_to_final,
     """assign core_slots, in order, to cols' occupied columns only, skipping
     gaps entirely rather than treating them as match-state deletions that
     advance the pool with no output. for blocks where match/insert-state
-    carries no reliable Sprinzl meaning: the CCA trailer (past the model's
-    own consensus structure) and any span whose alignment columns come from
-    an untrustworthy source rather than cmalign (see distrust_span on
-    sprinzl_map_from_alignment). returns the last label written, same
-    contract as _assign_block."""
+    carries no reliable Sprinzl meaning: the CCA trailer, which sits past the
+    model's own consensus structure, and any block holding exactly as many
+    bases as slots. returns the last label written, same contract as
+    _assign_block."""
     suffix_counts = {} if suffix_counts is None else suffix_counts
     exhausted = object()
     core_iter = iter(core_slots)
@@ -1056,23 +1055,29 @@ def _absorb_unclaimed_columns(specs):
     return out
 
 
-def sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None, distrust_span=None):
+def sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None, wc=False):
     """assign a Sprinzl label to every occupied column by reading match/
     insert/deletion status directly off cmalign's raw output (see module
     note above).
 
     - alignment: cmalign_one's return dict (raw aligned_seq/ss_cons, gapped).
     - anticodon, missing_arm: same meaning as sprinzl_map.
-    - distrust_span: optional (start, end) raw column range whose own
-      match/insert-state signal isn't cmalign's (e.g. mito's RNAfold-patched
-      threading-failure arm); any block overlapping it falls back to
-      _assign_plain_zip instead of trusting ss_cons there.
+    - wc: re-seat stems by base-pairing first (see
+      slide_stems_to_improve_pairing), sliding by occupied columns so a step
+      moves the helix one base.
+    - a sequence whose structure did not come from cmalign has no match/insert
+      state to read and belongs on sprinzl_map instead; see mito's
+      threading-failure branch.
     - returns {final_seq_index: label}, where final_seq_index matches
       finalize_structure's ungapped/uppercased seq (same base order) - pair
       with finalize_structure(alignment) for final_seq/final_ss."""
     aligned_seq, ss_cons = alignment["aligned_seq"], alignment["ss_cons"]
     raw_to_final = _raw_to_final_index(aligned_seq)
     raw_db = drop_orphan_brackets(RNA.db_from_WUSS(ss_cons))
+    if wc:
+        raw_db = slide_stems_to_improve_pairing(
+            aligned_seq, raw_db, anticodon, missing_arm,
+            shift=base_shift(aligned_seq))
     topo = parse_topology(raw_db)
     arms = locate_anticodon_stem(topo, raw_db, aligned_seq, anticodon, missing_arm)
 
@@ -1137,25 +1142,117 @@ def sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None, distrust_
 
     labels, suffix_counts, anchor = {}, {}, None
     for cols, core_slots, pools, mode in specs:
-        distrusted = distrust_span is not None and any(
-            distrust_span[0] <= c < distrust_span[1] for c in cols)
         # a block holding exactly as many bases as it has slots has only one
-        # consistent labelling, so the CM's own view of which columns are
+        # consistent labelling, so the CM's view of which columns are
         # matches carries no extra information there - and acting on it does
         # harm when the CM threaded the block poorly, which mt-tRNA loops
         # frequently do (bases parked in insert columns while the consensus
         # columns beside them are called deletions). read match/insert state
-        # only where the counts disagree and the placement is a real question.
+        # only where the counts disagree and the placement is in question.
         exact_fit = core_slots is not None and \
             _occupied_count(aligned_seq, cols) == len(core_slots)
         if mode == "anticodon":
             anchor = _assign_anticodon_loop_block(labels, cols, ss_cons, aligned_seq,
                                                    raw_to_final, anticodon, suffix_counts,
                                                    anchor=anchor)
-        elif mode == "zip" or distrusted or exact_fit:
+        elif mode == "zip" or exact_fit:
             anchor = _assign_plain_zip(labels, cols, core_slots, aligned_seq, raw_to_final,
                                         suffix_counts, anchor=anchor)
         else:
             anchor = _assign_block(labels, cols, core_slots, ss_cons, aligned_seq,
                                     raw_to_final, pools, suffix_counts, anchor=anchor)
     return labels
+# --- stem register correction (--wc) ---
+
+# a helix seated more than 2 positions off is a threading failure, handled by
+# mito's RNAfold patch instead
+MAX_STEM_SLIDE = 2
+
+SLIDE_OFFSETS = sorted([d for d in range(-MAX_STEM_SLIDE, MAX_STEM_SLIDE + 1) if d],
+                       key=lambda d: (abs(d), d))
+
+
+def _stem_pairs(ss, group):
+    """(5' col, 3' col) for each paired column of one stem group, read from the
+    pair table so a merged stem with a bulge keeps its true partners."""
+    pt = RNA.ptable(ss)
+    return [(i, pt[i + 1] - 1) for i in group["stem5_cols"] if pt[i + 1] > i + 1]
+
+
+def _pair_cols(pairs):
+    return {col for pair in pairs for col in pair}
+
+
+def _count_wc(seq, pairs):
+    return sum(1 for i, j in pairs if (seq[i], seq[j]) in WC_PAIRS)
+
+
+def base_shift(aligned_seq):
+    """shift function that moves a raw alignment column by N occupied columns,
+    so a slide displaces a helix by bases rather than by columns. Returns None
+    past either end. Without this, a slide across a gap column moves the helix
+    zero bases, which is not the same operation as sliding a stripped
+    structure."""
+    occupied = [c for c, ch in enumerate(aligned_seq) if ch not in "-."]
+    rank, n = {}, 0
+    for c, ch in enumerate(aligned_seq):
+        rank[c] = n
+        if ch not in "-.":
+            n += 1
+
+    def shift(col, offset):
+        i = rank[col] + offset
+        return occupied[i] if 0 <= i < len(occupied) else None
+    return shift
+
+
+def slide_stems_to_improve_pairing(seq, ss, anticodon, missing_arm=None, header="",
+                                    shift=None):
+    """re-seat stems that pair better one or two positions along; returns the
+    corrected dot-bracket structure.
+
+    Both strands move by one offset, so a stem keeps its length, bulges and
+    loop and only changes position. A slide needs a strict gain in WC/wobble
+    pairs, takes the smallest offset that gives one, and may not land on
+    another stem's columns. The acceptor and anticodon stems stay put, since
+    the rest of the numbering is anchored to them.
+
+    Human MT-TS1 motivates this: every canonical CM in the library seats its
+    D-stem with two mismatched pairs, one base off a fully paired register."""
+    shift = shift or (lambda col, offset: col + offset)
+    topo = parse_topology(ss)
+    arms = locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm)
+    frozen = set(topo["acceptor_5"] + topo["acceptor_3"] + arms["c_stem5"] + arms["c_stem3"])
+
+    groups = _forgi_stem_groups(ss)
+    owned = {c for g in groups for c in g["stem5_cols"] + g["stem3_cols"]}
+
+    moves = []
+    for group in groups:
+        pairs = _stem_pairs(ss, group)
+        cols = _pair_cols(pairs)
+        if not pairs or cols & frozen:
+            continue
+        blocked = owned - cols
+        for offset in SLIDE_OFFSETS:
+            moved = [(shift(i, offset), shift(j, offset)) for i, j in pairs]
+            new_cols = _pair_cols(moved)
+            if any(c is None for c in new_cols):
+                continue
+            if min(new_cols) < 0 or max(new_cols) >= len(seq) or new_cols & blocked:
+                continue
+            if _count_wc(seq, moved) > _count_wc(seq, pairs):
+                moves.append((pairs, moved))
+                break
+
+    out = list(ss)
+    for pairs, moved in moves:
+        logger.info(f"{header}: re-seated a stem by {moved[0][0] - pairs[0][0]:+d} "
+                    f"({_count_wc(seq, pairs)} -> {_count_wc(seq, moved)} of "
+                    f"{len(pairs)} pairs complementary)")
+        for i, j in pairs:
+            out[i] = out[j] = "."
+    for _, moved in moves:
+        for i, j in moved:
+            out[i], out[j] = "(", ")"
+    return "".join(out)

@@ -5,8 +5,8 @@ rerouting for mt-tRNAs.
 Everything here exists because mt-tRNAs can genuinely lose an arm (D-arm,
 T-arm, or both - Ozerova et al. 2024); cytosolic/nuclear tRNAs (sprinx.cyto)
 don't have this problem, so none of this module applies to them. Structural
-parsing and Sprinzl-label assignment (forgi topology, sprinzl_map) are
-generic and live in sprinx.common instead.
+parsing and Sprinzl-label assignment (forgi topology,
+sprinzl_map_from_alignment) are generic and live in sprinx.common instead.
 
 1. why score-based CM selection fails
    E-values are calibrated per model (Infernal User Guide); an armless CM
@@ -56,7 +56,7 @@ generic and live in sprinx.common instead.
       isoacceptors (Leu1/Leu2, Ser1/Ser2) disambiguated by
       anticodon, not filename suffix. for doubly-armless (D + T both missing),
       routes to the d_and_t CM.
-   e. assign Sprinzl coordinates (sprinx.common.sprinzl_map).
+   e. assign Sprinzl coordinates (sprinx.common.sprinzl_map_from_alignment).
 
 3. armless CM filenames: armless_trn{AA}_wo_{arm}.cm where arm is d, t, or
    d_and_t for doubly-armless (Ozerova et al. 2024). armless CM rerouting
@@ -97,6 +97,8 @@ from sprinx.common import (
     header_to_aa,
     header_to_anticodon,
     package_data_path,
+    slide_stems_to_improve_pairing,
+    sprinzl_map,
     sprinzl_map_from_alignment,
     stem_complementarity,
 )
@@ -704,7 +706,7 @@ def process_mito_record(args):
     - per-tier canonical CM resolution (which .cm path applies to this aa,
       if any) happens inside select_cm_and_align; see
       _resolve_canonical_for_tier."""
-    header, seq, canonical_cm_tiers, armless_cm_index, debug = args
+    header, seq, canonical_cm_tiers, armless_cm_index, debug, wc = args
     seq = seq.upper().replace("T", "U")
 
     if debug:
@@ -744,13 +746,17 @@ def process_mito_record(args):
         logger.warning(f"{header}: no anticodon in header; C-stem location unreliable")
 
     diagnosis = routing["diagnosis"] or {}
-    elem = routing.get("threading_failure_elem")
-    # the patched arm's structure is RNAfold's, not cmalign's - its raw
-    # columns carry no trustworthy match/insert-state signal, so that span
-    # alone falls back to a plain positional zip (see distrust_span).
-    distrust_span = elem["span"] if elem else None
-    sprinzl = sprinzl_map_from_alignment(alignment, anticodon, diagnosis.get("missing_arm"),
-                                          distrust_span=distrust_span)
+    missing_arm = diagnosis.get("missing_arm")
+    if routing.get("threading_failure_elem"):
+        # a patched arm's structure came from RNAfold, which produces a fold
+        # and no alignment, so there is no match/insert state to label from.
+        # these records go through the structure-only mapper.
+        if wc:
+            final_ss = slide_stems_to_improve_pairing(
+                final_seq, final_ss, anticodon, missing_arm, header)
+        sprinzl = sprinzl_map(final_ss, final_seq, anticodon, missing_arm)
+    else:
+        sprinzl = sprinzl_map_from_alignment(alignment, anticodon, missing_arm, wc=wc)
 
     unlabeled = [i for i in range(len(final_seq)) if i not in sprinzl]
     if unlabeled:
