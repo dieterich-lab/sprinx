@@ -19,6 +19,7 @@ run:
 import os
 import re
 import shutil
+import sys
 
 import pytest
 
@@ -50,7 +51,7 @@ CYTO_DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "cyto")
 def _load_mito_bundle_fa(key):
     text = open(MITO_BUNDLE_PATH, encoding="utf-8").read()
     chunks = re.split(r"^==> (.+?) <==\n", text, flags=re.MULTILINE)[1:]
-    bundle = {name: content for name, content in zip(chunks[0::2], chunks[1::2])}
+    bundle = dict(zip(chunks[0::2], chunks[1::2]))
     seqs, cur = {}, None
     for line in bundle[key].splitlines():
         if line.startswith(">"):
@@ -219,7 +220,7 @@ def test_select_cm_and_align_routing_and_no_unlabeled():
         unlabeled = [i for i in range(len(final_seq)) if i not in sprinzl]
         return routing, unlabeled
 
-    # canonical: not rerouted
+    # a canonical tRNA stays on its canonical CM
     for fa_key, seq_key in [("canonical_T_human.fa", "mtdbD00063518|Thr|UGU|Homo_sapiens"),
                             ("canonical_E_human.fa", "mtdbD00063517|Glu|UUC|Homo_sapiens")]:
         routing, unlabeled = _pipeline(seq_key, _load_mito_bundle_fa(fa_key)[seq_key])

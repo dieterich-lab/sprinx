@@ -33,4 +33,20 @@ artifacts = ["src/sprinx/data/**"]
 line-length = 88
 
 [tool.ruff.lint]
+# extend-select, not select: ruff enables ~414 rules by default and `select`
+# would replace that set rather than add to it.
+extend-select = [
+    "W292",     # missing newline at end of file
+    "C90",      # mccabe cyclomatic complexity
+    "C4",       # flake8-comprehensions
+    "ERA",      # commented-out code
+    "FBT",      # boolean positional/default args
+    "PLR0913",  # too many arguments
+]
 ignore = ["E701"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+max-args = 5
