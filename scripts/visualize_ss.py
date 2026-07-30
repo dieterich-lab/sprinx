@@ -2,12 +2,16 @@
 """
 visualize_ss.py: R2DT-rendered 2D diagrams for a sprinx TSV.
 
-standalone script, not part of the installable sprinx package: R2DT needs a
-Singularity image, which is unnecessary for anything just consuming
-sprinx's TSV output (e.g. QutRNA2). needs sprinx itself installed (for
-sprinx.common's header parsing and subprocess helpers) plus its own extra
-dependency, cairosvg (`pip install cairosvg`), and a Singularity/R2DT image
-(see README for setup).
+standalone script, not part of the installable sprinx package: R2DT is a
+container, which is unnecessary for anything just consuming sprinx's TSV
+output (e.g. QutRNA2). needs sprinx itself installed (for sprinx.common's
+header parsing and subprocess helpers) plus its own extra dependency,
+cairosvg (`pip install cairosvg`), and R2DT.
+
+R2DT is not bundled. resolve_r2dt_runtime finds it as r2dt.py on PATH, or as a
+container image run under apptainer, singularity, or docker. How to obtain it,
+and the image name, mount point, and subcommand this script passes, are all
+upstream's to define: see https://docs.r2dt.bio.
 
 reads a sprinzl_mapping.tsv produced by `sprinx --out ...` (see sprinx.cli):
 seq_id, seq_index, nucleotide, sprinzl_position, region, cm_used, rerouted,
@@ -37,6 +41,7 @@ import argparse
 import glob
 import os
 import shutil
+import sys
 import tempfile
 import textwrap
 import xml.etree.ElementTree as ET
@@ -47,8 +52,81 @@ from loguru import logger
 
 from sprinx.common import header_to_aa, header_to_taxon, run
 
-R2DT_DEFAULT_IMAGE = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "lib", "r2dt")
+# Upstream R2DT conventions, per https://docs.r2dt.bio: the published image
+# name, and the mount point its docs bind the working directory to for both
+# docker and singularity. Change here if upstream changes them.
+R2DT_DEFAULT_DOCKER_IMAGE = "rnacentral/r2dt"
+R2DT_CONTAINER_TEMP = "/rna/r2dt/temp"
+
+R2DT_RUNTIMES = ("auto", "docker", "singularity", "apptainer", "native")
+
+R2DT_SETUP_HINT = (
+    "see https://docs.r2dt.bio to install R2DT, then either put r2dt.py on "
+    "PATH or pass the container image to --r2dt-image"
+)
+
+
+class R2DTUnavailable(RuntimeError):
+    """no usable R2DT runtime was found."""
+
+
+def resolve_r2dt_runtime(runtime="auto", image=None):
+    """pick how to invoke r2dt.py; returns (runtime_name, image_or_None).
+
+    auto prefers a native r2dt.py on PATH, then a container image supplied via
+    --r2dt-image, then docker with the public image. Raises R2DTUnavailable
+    naming what was tried, rather than falling back to a path that may not
+    exist."""
+    if runtime == "native" or (runtime == "auto" and not image and shutil.which("r2dt.py")):
+        if not shutil.which("r2dt.py"):
+            raise R2DTUnavailable(f"r2dt.py is not on PATH.\n{R2DT_SETUP_HINT}")
+        return "native", None
+
+    if runtime in ("singularity", "apptainer"):
+        if not image:
+            raise R2DTUnavailable(f"--r2dt-runtime {runtime} needs --r2dt-image.\n{R2DT_SETUP_HINT}")
+        if not shutil.which(runtime):
+            raise R2DTUnavailable(f"{runtime} is not on PATH.\n{R2DT_SETUP_HINT}")
+        return runtime, image
+
+    if runtime == "docker":
+        if not shutil.which("docker"):
+            raise R2DTUnavailable(f"docker is not on PATH.\n{R2DT_SETUP_HINT}")
+        return "docker", image or R2DT_DEFAULT_DOCKER_IMAGE
+
+    # anything written as a path runs under apptainer/singularity; a bare name
+    # like rnacentral/r2dt is a docker reference.
+    if image and (os.path.isabs(image) or image.startswith((".", "~")) or os.path.isfile(image)):
+        if not os.path.isfile(image):
+            raise R2DTUnavailable(f"no R2DT image at {image}")
+        for candidate in ("apptainer", "singularity"):
+            if shutil.which(candidate):
+                return candidate, image
+        raise R2DTUnavailable(
+            f"{image} needs apptainer or singularity, neither is on PATH.\n"
+            f"{R2DT_SETUP_HINT}")
+    if shutil.which("docker"):
+        return "docker", image or R2DT_DEFAULT_DOCKER_IMAGE
+    raise R2DTUnavailable(
+        f"found no way to run R2DT: r2dt.py is not on PATH and docker is not "
+        f"installed.\n{R2DT_SETUP_HINT}")
+
+
+def r2dt_command(runtime, image, tmpdir, args):
+    """full argv to run `r2dt.py <args>` under the chosen runtime. Container
+    runtimes see tmpdir mounted at R2DT_CONTAINER_TEMP, so args must already
+    use container-side paths; native mode substitutes the real tmpdir back in."""
+    if runtime == "native":
+        return ["r2dt.py"] + [a.replace(R2DT_CONTAINER_TEMP, tmpdir) for a in args]
+    if runtime == "docker":
+        # --user keeps the output owned by the caller, so the temp dir stays
+        # removable; -w moves the working directory onto the bind mount, since
+        # r2dt.py also writes paths relative to it.
+        user = ["--user", f"{os.getuid()}:{os.getgid()}"] if hasattr(os, "getuid") else []
+        return ["docker", "run", "--rm", *user, "-w", R2DT_CONTAINER_TEMP,
+                "-v", f"{tmpdir}:{R2DT_CONTAINER_TEMP}", image, "r2dt.py"] + args
+    return [runtime, "exec", "-B", f"{tmpdir}:{R2DT_CONTAINER_TEMP}", image,
+            "r2dt.py"] + args
 
 
 def _r2dt_id_line(segments):
@@ -256,31 +334,37 @@ def _grid_svg(panels, ncols, gap=20):
     return ET.ElementTree(root)
 
 
-def make_plot(records, out_path, r2dt_image=R2DT_DEFAULT_IMAGE, ncols=6):
+def make_plot(records, out_path, runtime="auto", r2dt_image=None, ncols=6):
     """R2DT-rendered 2D diagram, one panel per record, arranged into our own
     grid (see _grid_svg: R2DT's own stitching doesn't wrap into rows).
     plotted in header order: species (taxon field) first, then tRNA (aa
     field), so isoacceptors of the same species group together and species
-    cluster in the figure. runs R2DT via its Singularity image (see README
-    for setup); failures are logged and skipped, not raised, since this
-    script is a sanity-check convenience, not sprinx's actual output."""
+    cluster in the figure.
+
+    Returns True when out_path was written. A caller that reports success
+    must check it: R2DT failing, or emitting no SVG, leaves no file behind."""
     if not records:
         logger.warning("nothing to plot")
-        return
+        return False
     plotted = sorted(records, key=lambda r: (header_to_taxon(r["header"]) or "",
                                               header_to_aa(r["header"]) or "", r["header"]))
 
+    runtime, image = resolve_r2dt_runtime(runtime, r2dt_image)
+    logger.debug(f"R2DT runtime: {runtime}" + (f", image {image}" if image else ""))
+
     sto_text, names = build_r2dt_stockholm(plotted)
-    with tempfile.TemporaryDirectory() as tmpdir:
+    # a container can leave files the caller cannot delete; losing the temp dir
+    # matters less than losing a finished plot.
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         with open(os.path.join(tmpdir, "sprinx_plot.sto"), "w") as f:
             f.write(sto_text)
-        cmd = ["singularity", "exec", "-B", f"{tmpdir}:/rna/r2dt/temp", r2dt_image,
-               "r2dt.py", "stockholm", "/rna/r2dt/temp/sprinx_plot.sto",
-               "/rna/r2dt/temp/out", "--no-stitch"]
+        cmd = r2dt_command(runtime, image, tmpdir,
+                           ["stockholm", f"{R2DT_CONTAINER_TEMP}/sprinx_plot.sto",
+                            f"{R2DT_CONTAINER_TEMP}/out", "--no-stitch"])
         _, stderr, rc = run(cmd)
         if rc != 0:
-            logger.warning(f"R2DT plotting failed: {stderr.strip()[:500]}")
-            return
+            logger.error(f"R2DT plotting failed: {stderr.strip()[:500]}")
+            return False
 
         svg_dir = os.path.join(tmpdir, "out", "results", "svg")
         panels = []
@@ -295,8 +379,8 @@ def make_plot(records, out_path, r2dt_image=R2DT_DEFAULT_IMAGE, ncols=6):
             panels.append((root, width, height, caption, r["sprinzl"], r["region"]))
 
         if not panels:
-            logger.warning("R2DT plotting produced no SVG output")
-            return
+            logger.error("R2DT plotting produced no SVG output")
+            return False
 
         grid_path = os.path.join(tmpdir, "grid.svg")
         _grid_svg(panels, ncols).write(grid_path)
@@ -306,6 +390,7 @@ def make_plot(records, out_path, r2dt_image=R2DT_DEFAULT_IMAGE, ncols=6):
             shutil.copy(grid_path, out_path)
         else:
             _convert_svg(grid_path, out_path, ext)
+        return True
 
 
 _SVG_CONVERTERS = {".png": cairosvg.svg2png, ".pdf": cairosvg.svg2pdf}
@@ -383,12 +468,24 @@ def main():
                              "sequence arranged in a grid; format is chosen by "
                              "extension (.svg, .png, .pdf)")
     parser.add_argument("--ncols", type=int, default=6, help="plot grid columns")
-    parser.add_argument("--r2dt-image", default=R2DT_DEFAULT_IMAGE, metavar="PATH",
-                        help=f"R2DT Singularity image (default: {R2DT_DEFAULT_IMAGE})")
+    parser.add_argument("--r2dt-image", metavar="IMAGE",
+                        help="R2DT container image: a .sif path for apptainer or "
+                             "singularity, or a docker image reference. defaults to "
+                             f"{R2DT_DEFAULT_DOCKER_IMAGE} when docker is used")
+    parser.add_argument("--r2dt-runtime", choices=R2DT_RUNTIMES, default="auto",
+                        help="how to invoke r2dt.py. auto prefers r2dt.py on PATH, "
+                             "then --r2dt-image, then docker (default: auto)")
     args = parser.parse_args()
 
     records = _records_from_tsv(args.tsv)
-    make_plot(records, args.out, r2dt_image=args.r2dt_image, ncols=args.ncols)
+    try:
+        ok = make_plot(records, args.out, runtime=args.r2dt_runtime,
+                       r2dt_image=args.r2dt_image, ncols=args.ncols)
+    except R2DTUnavailable as exc:
+        logger.error(str(exc))
+        sys.exit(1)
+    if not ok:
+        sys.exit(1)
     logger.info(f"plot: {args.out}")
 
     # sequences RNAfold-patched for a CM threading failure: also plot the
@@ -397,8 +494,9 @@ def main():
     cm_only_records = [{**r, "ss": r["cm_only_ss"]} for r in records if r.get("cm_only_ss")]
     if cm_only_records:
         cm_only_path = _cm_only_plot_path(args.out)
-        make_plot(cm_only_records, cm_only_path, r2dt_image=args.r2dt_image, ncols=args.ncols)
-        logger.info(f"plot (CM-only, pre-RNAfold-patch): {cm_only_path}")
+        if make_plot(cm_only_records, cm_only_path, runtime=args.r2dt_runtime,
+                     r2dt_image=args.r2dt_image, ncols=args.ncols):
+            logger.info(f"plot (CM-only, pre-RNAfold-patch): {cm_only_path}")
 
     # same sequences, but folded naively as a whole with RNAfold alone (no
     # CM at all): shows why the hybrid exists, since full-sequence MFE misses
@@ -406,8 +504,9 @@ def main():
     rnafold_only_records = [{**r, "ss": r["rnafold_only_ss"]} for r in records if r.get("rnafold_only_ss")]
     if rnafold_only_records:
         rnafold_only_path = _rnafold_only_plot_path(args.out)
-        make_plot(rnafold_only_records, rnafold_only_path, r2dt_image=args.r2dt_image, ncols=args.ncols)
-        logger.info(f"plot (RNAfold-only, whole-sequence naive fold): {rnafold_only_path}")
+        if make_plot(rnafold_only_records, rnafold_only_path, runtime=args.r2dt_runtime,
+                     r2dt_image=args.r2dt_image, ncols=args.ncols):
+            logger.info(f"plot (RNAfold-only, whole-sequence naive fold): {rnafold_only_path}")
 
 
 if __name__ == "__main__":
