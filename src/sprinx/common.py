@@ -1055,16 +1055,16 @@ def _absorb_unclaimed_columns(specs):
     return out
 
 
-def sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None, wc=False):
+def sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None, wc=False, header=""):
     """assign a Sprinzl label to every occupied column by reading match/
     insert/deletion status directly off cmalign's raw output (see module
     note above).
 
     - alignment: cmalign_one's return dict (raw aligned_seq/ss_cons, gapped).
     - anticodon, missing_arm: same meaning as sprinzl_map.
-    - wc: re-seat stems by base-pairing first (see
-      slide_stems_to_improve_pairing), sliding by occupied columns so a step
-      moves the helix one base.
+    - wc: how far a stem may be re-seated by base-pairing first (see
+      slide_stems_to_improve_pairing); 0 skips it. sliding is by occupied
+      columns, so a step moves the helix one base.
     - a sequence whose structure did not come from cmalign has no match/insert
       state to read and belongs on sprinzl_map instead; see mito's
       threading-failure branch.
@@ -1073,11 +1073,8 @@ def sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None, wc=False)
       with finalize_structure(alignment) for final_seq/final_ss."""
     aligned_seq, ss_cons = alignment["aligned_seq"], alignment["ss_cons"]
     raw_to_final = _raw_to_final_index(aligned_seq)
+    ss_cons = slide_stems_in_alignment(aligned_seq, ss_cons, max_slide=wc, header=header)
     raw_db = drop_orphan_brackets(RNA.db_from_WUSS(ss_cons))
-    if wc:
-        raw_db = slide_stems_to_improve_pairing(
-            aligned_seq, raw_db, anticodon, missing_arm,
-            shift=base_shift(aligned_seq))
     topo = parse_topology(raw_db)
     arms = locate_anticodon_stem(topo, raw_db, aligned_seq, anticodon, missing_arm)
 
@@ -1164,12 +1161,15 @@ def sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None, wc=False)
     return labels
 # --- stem register correction (--wc) ---
 
-# a helix seated more than 2 positions off is a threading failure, handled by
+# a helix seated further off than this is a threading failure, handled by
 # mito's RNAfold patch instead
 MAX_STEM_SLIDE = 2
 
-SLIDE_OFFSETS = sorted([d for d in range(-MAX_STEM_SLIDE, MAX_STEM_SLIDE + 1) if d],
-                       key=lambda d: (abs(d), d))
+
+def slide_offsets(max_slide):
+    """offsets to try, nearest first, so the smallest move that gains wins."""
+    return sorted([d for d in range(-max_slide, max_slide + 1) if d],
+                  key=lambda d: (abs(d), d))
 
 
 def _stem_pairs(ss, group):
@@ -1187,39 +1187,133 @@ def _count_wc(seq, pairs):
     return sum(1 for i, j in pairs if (seq[i], seq[j]) in WC_PAIRS)
 
 
-def base_shift(aligned_seq):
-    """shift function that moves a raw alignment column by N occupied columns,
-    so a slide displaces a helix by bases rather than by columns. Returns None
-    past either end. Without this, a slide across a gap column moves the helix
-    zero bases, which is not the same operation as sliding a stripped
-    structure."""
-    occupied = [c for c, ch in enumerate(aligned_seq) if ch not in "-."]
-    rank, n = {}, 0
-    for c, ch in enumerate(aligned_seq):
-        rank[c] = n
-        if ch not in "-.":
-            n += 1
+def wuss_stems(ss_cons):
+    """internal stems as [{'pairs': [(5' col, 3' col), ...]}, ...], 5'->3'.
+    e.g. [{'pairs': [(10,25), (11,24), (12,23)]}, {'pairs': [(49,65), (50,64), (51,63)]}]
 
-    def shift(col, offset):
-        i = rank[col] + offset
-        return occupied[i] if 0 <= i < len(occupied) else None
-    return shift
+    WUSS marks the acceptor stem '(' ')' and every internal stem '<' '>', so
+    the arms come from the consensus line. 
+    Nested pairs belong to one stem; a disjoint span
+    starts the next."""
+    stack, pairs = [], []
+    for col, sym in enumerate(ss_cons):
+        if sym == "<":
+            stack.append(col)
+        elif sym == ">" and stack:
+            pairs.append((stack.pop(), col))
+    stems = []
+    for i, j in sorted(pairs):
+        if stems and i < stems[-1]["pairs"][-1][1]:
+            stems[-1]["pairs"].append((i, j))
+        else:
+            stems.append({"pairs": [(i, j)]})
+    return stems
+
+
+def _occupied_cols(aligned_seq):
+    return [c for c, ch in enumerate(aligned_seq) if ch not in "-."]
+
+
+def _column_offset_for_bases(aligned_seq, edge, steps, direction, taken):
+    """columns from `edge` out to the `steps`-th free base beyond it, in
+    `direction`.
+
+    Only columns holding a base count, so deletions are stepped over, and
+    only columns no other helix owns, so the count never runs through a
+    neighbouring stem. Returns None when another helix or the end of the
+    sequence arrives first: with no free base to move onto, there is nothing
+    to slide."""
+    seen, col = 0, edge + direction
+    while 0 <= col < len(aligned_seq):
+        if col in taken:
+            return None
+        if aligned_seq[col] not in "-.":
+            seen += 1
+            if seen == steps:
+                return abs(col - edge)
+        col += direction
+    return None
+
+
+def slide_stems_in_alignment(aligned_seq, ss_cons, max_slide=1, header=""):
+    """re-seat internal stems on the consensus line; returns a new ss_cons.
+
+    The whole helix moves by one column offset, so it stays a helix. The
+    offset is measured in free bases rather than columns: one step lands on
+    the next base that no other helix owns, stepping over deletions.
+
+    The anticodon stem stays put, since the numbering is anchored to it, and
+    the acceptor stem is '(' ')' in WUSS so it is never a candidate. A move
+    needs a strict gain in WC/wobble pairs. max_slide of 0 disables sliding;
+    ss_cons also comes back unchanged when the anticodon stem cannot be
+    identified by stem count."""
+    if max_slide < 1:
+        return ss_cons
+    stems = wuss_stems(ss_cons)
+    frozen_idx = EXPECTED_ANTICODON_ARM_INDEX.get(len(stems))
+    if frozen_idx is None:
+        logger.debug(f"{header}: {len(stems)} internal stems, cannot tell which is the "
+                     f"anticodon arm; leaving the structure alone")
+        return ss_cons
+
+    paired = {c for c, sym in enumerate(ss_cons) if sym in "<>()"}
+    out = list(ss_cons)
+    for idx, stem in enumerate(stems):
+        if idx == frozen_idx:
+            continue
+        pairs = stem["pairs"]
+        cols = {c for p in pairs for c in p}
+        taken = paired - cols
+        base = _count_wc(aligned_seq, pairs)
+        for steps in range(1, max_slide + 1):
+            moved = _best_slide(aligned_seq, pairs, min(cols), max(cols), steps, taken, base)
+            if moved is None:
+                continue
+            for i, j in pairs:
+                out[i] = out[j] = ","
+            for i, j in moved:
+                out[i], out[j] = "<", ">"
+            logger.info(f"{header}: re-seated a stem by {steps} base(s) "
+                        f"({base} -> {_count_wc(aligned_seq, moved)} of {len(pairs)} "
+                        f"pairs complementary)")
+            break
+    return "".join(out)
+
+
+def _best_slide(aligned_seq, pairs, edge5, edge3, steps, taken, base):
+    """moved pairs for a `steps`-base slide either way, or None if neither
+    direction is reachable or improves on `base`."""
+    for direction, edge in ((-1, edge5), (1, edge3)):
+        delta = _column_offset_for_bases(aligned_seq, edge, steps, direction, taken)
+        if delta is None:
+            continue
+        moved = [(i + direction * delta, j + direction * delta) for i, j in pairs]
+        cols = {c for p in moved for c in p}
+        if cols & taken or min(cols) < 0 or max(cols) >= len(aligned_seq):
+            continue
+        if _count_wc(aligned_seq, moved) > base:
+            return moved
+    return None
 
 
 def slide_stems_to_improve_pairing(seq, ss, anticodon, missing_arm=None, header="",
-                                    shift=None):
-    """re-seat stems that pair better one or two positions along; returns the
+                                    max_slide=1):
+    """re-seat stems that pair better a position or two along; returns the
     corrected dot-bracket structure.
+
+    For a gap-free structure, where one position is one base. The alignment
+    equivalent is slide_stems_in_alignment; mito's RNAfold-patched arms come
+    here instead, having a fold but no alignment behind them.
 
     Both strands move by one offset, so a stem keeps its length, bulges and
     loop and only changes position. A slide needs a strict gain in WC/wobble
     pairs, takes the smallest offset that gives one, and may not land on
-    another stem's columns. The acceptor and anticodon stems stay put, since
-    the rest of the numbering is anchored to them.
+    another stem's columns. max_slide bounds how far it may travel. The
+    acceptor and anticodon stems stay put, since the rest of the numbering is
+    anchored to them.
 
     Human MT-TS1 motivates this: every canonical CM in the library seats its
     D-stem with two mismatched pairs, one base off a fully paired register."""
-    shift = shift or (lambda col, offset: col + offset)
     topo = parse_topology(ss)
     arms = locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm)
     frozen = set(topo["acceptor_5"] + topo["acceptor_3"] + arms["c_stem5"] + arms["c_stem3"])
@@ -1234,11 +1328,9 @@ def slide_stems_to_improve_pairing(seq, ss, anticodon, missing_arm=None, header=
         if not pairs or cols & frozen:
             continue
         blocked = owned - cols
-        for offset in SLIDE_OFFSETS:
-            moved = [(shift(i, offset), shift(j, offset)) for i, j in pairs]
+        for offset in slide_offsets(max_slide):
+            moved = [(i + offset, j + offset) for i, j in pairs]
             new_cols = _pair_cols(moved)
-            if any(c is None for c in new_cols):
-                continue
             if min(new_cols) < 0 or max(new_cols) >= len(seq) or new_cols & blocked:
                 continue
             if _count_wc(seq, moved) > _count_wc(seq, pairs):

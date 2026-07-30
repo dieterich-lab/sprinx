@@ -153,11 +153,13 @@ def main():
                              "without re-running cmalign")
     parser.add_argument("-p", "--processes", type=int, default=4,
                         help="worker processes (default: 4)")
-    parser.add_argument("--wc", action="store_true",
-                        help="re-seat a stem when the same helix pairs better one or two "
-                             "positions along; corrects a CM that threaded a helix onto the "
-                             "wrong bases. only applied on a strict gain in Watson-Crick/wobble "
-                             "pairs, so a well-threaded stem is left alone")
+    parser.add_argument("--wc", type=int, choices=(0, 1, 2), default=1, metavar="N",
+                        help="how far a stem may be re-seated when the same helix pairs "
+                             "better elsewhere, correcting a CM that threaded it onto the "
+                             "wrong bases. 0 disables, 1 (default) allows the adjacent "
+                             "register, 2 also allows moving over a position. only applied "
+                             "on a strict gain in Watson-Crick/wobble pairs, so a "
+                             "well-threaded stem is left alone")
     parser.add_argument("--debug", action="store_true",
                         help="log alignment, arm-loss diagnosis, and CM routing for every sequence")
     args = parser.parse_args()

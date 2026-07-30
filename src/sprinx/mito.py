@@ -753,10 +753,10 @@ def process_mito_record(args):
         # these records go through the structure-only mapper.
         if wc:
             final_ss = slide_stems_to_improve_pairing(
-                final_seq, final_ss, anticodon, missing_arm, header)
+                final_seq, final_ss, anticodon, missing_arm, header, max_slide=wc)
         sprinzl = sprinzl_map(final_ss, final_seq, anticodon, missing_arm)
     else:
-        sprinzl = sprinzl_map_from_alignment(alignment, anticodon, missing_arm, wc=wc)
+        sprinzl = sprinzl_map_from_alignment(alignment, anticodon, missing_arm, wc=wc, header=header)
 
     unlabeled = [i for i in range(len(final_seq)) if i not in sprinzl]
     if unlabeled:

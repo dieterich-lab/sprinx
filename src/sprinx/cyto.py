@@ -165,7 +165,7 @@ def process_cyto_record(args):
     if anticodon is None:
         logger.warning(f"{header}: no anticodon in header; C-stem location unreliable")
 
-    sprinzl = sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None, wc=wc)
+    sprinzl = sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None, wc=wc, header=header)
 
     unlabeled = [i for i in range(len(final_seq)) if i not in sprinzl]
     if unlabeled:
