@@ -5,9 +5,9 @@
 # Floors sit under the value measured on data/cyto/euk_gtrnadb.fa, 531 seqs.
 # Failing means labels moved across seq positions.
 #
-# 21 has a low floor, and 19 is missing, because the D-loop is half fixed: short
-# loops label correctly, full eight-base loops still put the GG on 17-18 instead
-# of 18-19. Hoping to fix that and both go to 0.95.
+# 19 is missing because loops that fill all eight D-loop slots still put the
+# conserved GG on 17-18 instead of 18-19, leaving it at 0.58. Hoping to fix that
+# and it joins the rest at 0.95.
 #
 # 74-76 are absent as conserved tests 
 # because sprinx tests do not label the CCA end.
@@ -16,7 +16,7 @@
 8	U	0.95	0.991
 14	A	0.95	0.989
 18	G	0.95	0.985
-21	A	0.80	0.837
+21	A	0.95	0.981
 33	U	0.95	0.985
 53	G	0.95	0.989
 54	U	0.90	0.947

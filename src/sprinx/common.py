@@ -1044,6 +1044,9 @@ def _assign_anticodon_loop_block(labels, cols, ss_cons, aligned_seq, raw_to_fina
 # which Biela et al. 2023 lists among the nucleotides conserved across tRNAs.
 D_LOOP_DROP_ORDER = ["17", "20", "16", "19", "18"]
 
+# the D-loop takes its extra bases at 20a/20b far more often than at 17a
+D_LOOP_INSERTION_ORDER = ["20a", "20b", "17a"]
+
 
 def _shrink_slots(core_slots, n_bases, drop_order):
     """core_slots cut down to n_bases entries, dropping in drop_order and
@@ -1051,6 +1054,24 @@ def _shrink_slots(core_slots, n_bases, drop_order):
     the gap wherever its deletions fell, which strands a conserved position."""
     dropped = set(drop_order[:len(core_slots) - n_bases])
     return [slot for slot in core_slots if slot not in dropped]
+
+
+def _expand_slots(core_slots, n_bases, insertion_pools, code_order=()):
+    """core_slots grown toward n_bases by spending reserved insertion codes at
+    their anchors. Bases beyond the core count give the number of insertions,
+    so every core slot keeps a base and the spares take the reserved codes.
+    code_order picks which codes go first; anything left over follows in
+    anchor order."""
+    extra = n_bases - len(core_slots)
+    available = [(slot, code) for slot in core_slots for code in insertion_pools.get(slot, ())]
+    ranked = sorted(available, key=lambda sc: (code_order.index(sc[1])
+                                               if sc[1] in code_order else len(code_order)))
+    spend = {code for _, code in ranked[:max(extra, 0)]}
+    grown = []
+    for slot in core_slots:
+        grown.append(slot)
+        grown.extend(code for code in insertion_pools.get(slot, ()) if code in spend)
+    return grown
 
 
 def _absorb_unclaimed_columns(specs):
@@ -1161,8 +1182,12 @@ def sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None, wc=False,
         # columns beside them are called deletions). read match/insert state
         # only where the counts disagree and the placement is in question.
         n_bases = _occupied_count(aligned_seq, cols)
-        if mode == "d_loop" and core_slots and n_bases < len(core_slots):
-            core_slots = _shrink_slots(core_slots, n_bases, D_LOOP_DROP_ORDER)
+        if mode == "d_loop" and core_slots:
+            if n_bases < len(core_slots):
+                core_slots = _shrink_slots(core_slots, n_bases, D_LOOP_DROP_ORDER)
+            elif n_bases > len(core_slots):
+                core_slots = _expand_slots(core_slots, n_bases, pools or {},
+                                           D_LOOP_INSERTION_ORDER)
         exact_fit = core_slots is not None and n_bases == len(core_slots)
         if mode == "anticodon":
             anchor = _assign_anticodon_loop_block(labels, cols, ss_cons, aligned_seq,
