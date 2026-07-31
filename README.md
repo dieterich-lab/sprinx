@@ -339,9 +339,12 @@ output/             example run artifacts (TSVs, PNGs)
 
 ## Testing
 
+`pytest` lives in the `test` extra.
+
 ```bash
-pytest tests/test_sprinx_unit.py
-pytest tests/test_sprinx_integration.py     # requires cmalign and SPRINX_CANONICAL_CM /
+uv run --extra test pytest tests/test_sprinx_unit.py
+uv run --extra test pytest tests/test_sprinx_integration.py
+                                             # requires cmalign and SPRINX_CANONICAL_CM /
                                              # SPRINX_ARMLESS_CM_DIR, set via .env
 ```
 
