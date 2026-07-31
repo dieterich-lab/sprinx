@@ -40,7 +40,6 @@ from sprinx.common import (
     header_to_anticodon,
     package_data_path,
     run,
-    slide_stems_to_improve_pairing,
     SPRINZL_REGION,
     sprinzl_map_from_alignment,
 )
