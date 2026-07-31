@@ -1,5 +1,7 @@
 # sprinx
 
+[![CI](https://github.com/dieterich-lab/sprinx/actions/workflows/ci.yaml/badge.svg)](https://github.com/dieterich-lab/sprinx/actions/workflows/ci.yaml)
+
 Sprinzl numbering is the standard positional scheme for describing tRNA
 structure across species. sprinx assigns Sprinzl coordinates to tRNA
 sequences. It's a component of the QutRNA2 pipeline, usable standalone or

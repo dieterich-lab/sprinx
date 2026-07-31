@@ -506,8 +506,10 @@ def _load_conserved_positions():
 def euk_gtrnadb_labels():
     """name -> (base, sprinzl_position) per sequence position in 5'->3' order,
     for the whole euk GtRNAdb set, with '' where sprinx assigned no label.
-    Labeling all 531 sequences costs about a minute, so the conserved-base and
-    CM-agreement tests share one run."""
+    Labeling all 531 sequences takes about 12 seconds, shared across the
+    conserved-base and CM-agreement tests. The full set is deliberate: the
+    conserved-base fractions are measured over natural sequence diversity, so
+    collapsing the input would change what they mean."""
     seqs = _load_fasta_file(os.path.join(CYTO_DATA_DIR, "euk_gtrnadb.fa"))
     cm_db_path = cyto.default_cm_db_path("euk")
     isotype_index = cyto.index_isotype_cms(cm_db_path)
