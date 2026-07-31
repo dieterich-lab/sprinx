@@ -3,7 +3,7 @@ sprinx.cyto: combined-CM-database selection for cytosolic/nuclear tRNAs
 (--scheme euk/arch/bact).
 
 picks the matching per-isotype CM from a domain's combined database, then
-hands the winning alignment straight to sprinx.common.sprinzl_map.
+hands the winning alignment straight to sprinx.common.sprinzl_map_from_alignment.
 
 CM source: tRNAscan-SE's per-isotype combined covariance-model databases
 (TRNAinf-{euk,arch,bact}-iso from
@@ -41,7 +41,7 @@ from sprinx.common import (
     package_data_path,
     run,
     SPRINZL_REGION,
-    sprinzl_map,
+    sprinzl_map_from_alignment,
 )
 
 ISOTYPE_MODEL_RE = re.compile(r"^[a-z]+-([A-Za-z]+\d*)$")
@@ -140,8 +140,8 @@ def process_cyto_record(args):
     """worker for one (header, seq) FASTA record, cytosolic/nuclear path.
 
     takes a single tuple for Pool.map compatibility. the winning alignment
-    goes straight to sprinzl_map, with no arm-loss step of any kind."""
-    header, seq, cm_db_path, isotype_index, debug = args
+    goes straight to sprinzl_map_from_alignment, with no arm-loss step of any kind."""
+    header, seq, cm_db_path, isotype_index, debug, wc = args
     seq = seq.upper().replace("T", "U")
 
     if debug:
@@ -164,7 +164,7 @@ def process_cyto_record(args):
     if anticodon is None:
         logger.warning(f"{header}: no anticodon in header; C-stem location unreliable")
 
-    sprinzl = sprinzl_map(final_ss, final_seq, anticodon, missing_arm=None)
+    sprinzl = sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None, wc=wc, header=header)
 
     unlabeled = [i for i in range(len(final_seq)) if i not in sprinzl]
     if unlabeled:

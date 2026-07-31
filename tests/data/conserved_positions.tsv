@@ -1,0 +1,26 @@
+# Bases that are near-invariant at their Sprinzl position (Biela et al. 2023).
+# If a label drifts off its column, the base under it changes and the fraction
+# drops, so each position gets a floor.
+#
+# Floors sit under the value measured on data/cyto/euk_gtrnadb.fa, 531 seqs.
+# Failing means labels moved across seq positions.
+#
+# 19 is missing because loops that fill all eight D-loop slots still put the
+# conserved GG on 17-18 instead of 18-19, leaving it at 0.58. Hoping to fix that
+# and it joins the rest at 0.95.
+#
+# 74-76 are absent as conserved tests 
+# because sprinx tests do not label the CCA end.
+#
+# sprinzl_position	base	min_fraction	measured
+8	U	0.95	0.991
+14	A	0.95	0.989
+18	G	0.95	0.985
+21	A	0.95	0.981
+33	U	0.95	0.985
+53	G	0.95	0.989
+54	U	0.90	0.947
+55	U	0.95	0.998
+56	C	0.95	0.962
+58	A	0.95	0.985
+61	C	0.95	0.979

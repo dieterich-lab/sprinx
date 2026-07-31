@@ -2,7 +2,7 @@
 test_sprinx_unit.py: unit tests for sprinx.common and sprinx.mito.
 
 no subprocess calls; infernal not required. pre-computed cmalign Stockholm
-alignments are in test_data_bundle.txt (==> name <== markers, produced with
+alignments are in data/test_data_bundle.txt (==> name <== markers, produced with
 `cmalign --notrunc --nonbanded -g`). ViennaRNA (RNA module) is always present
 when sprinx is importable (hard import), so RNA API tests are unconditional.
 
@@ -13,19 +13,20 @@ rather than parametrizing, to keep the run count small.
 """
 import os
 import re
+import sys
 
 import pytest
 import RNA
 
 from sprinx import common, mito
 
-MITO_BUNDLE_PATH = os.path.join(os.path.dirname(__file__), "test_data_bundle.txt")
+MITO_BUNDLE_PATH = os.path.join(os.path.dirname(__file__), "data", "test_data_bundle.txt")
 
 
 def load_mito_bundle():
     text = open(MITO_BUNDLE_PATH).read()
     chunks = re.split(r"^==> (.+?) <==\n", text, flags=re.MULTILINE)[1:]
-    return {name: content for name, content in zip(chunks[0::2], chunks[1::2])}
+    return dict(zip(chunks[0::2], chunks[1::2]))
 
 
 MITO_BUNDLE = load_mito_bundle()
@@ -210,7 +211,7 @@ def test_stem_complementarity_and_anticodon_search():
 # -----------------------------------------------------------------------
 
 def test_sprinzl_map_real_data_invariants():
-    # (sto, tag, anticodon, missing_arm)
+    # each case is a stockholm file, header tag, anticodon, then missing arm
     cases = [
         ("aln_E_canonical_qutrna.sto",  "Glu|UUC|Homo",  "UUC", None),
         ("aln_T_canonical_qutrna.sto",  "Thr|UGU|Homo",  "UGU", None),

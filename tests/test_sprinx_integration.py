@@ -16,9 +16,11 @@ run:
   SPRINX_CANONICAL_CM=data/mito/TRNAinf-euk.cm SPRINX_ARMLESS_CM_DIR=src/sprinx/data/mito_cm/armless/ \\
   pytest test_sprinx_integration.py -v
 """
+import multiprocessing
 import os
 import re
 import shutil
+import sys
 
 import pytest
 
@@ -37,7 +39,7 @@ need_mito_armless = pytest.mark.skipif(
 # tests only need cmalign itself.
 need_cmalign_only = pytest.mark.skipif(not CMALIGN_OK, reason="requires cmalign in PATH")
 
-MITO_BUNDLE_PATH = os.path.join(os.path.dirname(__file__), "test_data_bundle.txt")
+MITO_BUNDLE_PATH = os.path.join(os.path.dirname(__file__), "data", "test_data_bundle.txt")
 MITO_DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "mito")
 MITO_CM_DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "src", "sprinx", "data", "mito_cm")
 MITO_BACT_CM = os.path.join(MITO_CM_DATA_DIR, "canonical", "TRNAinf-bact.cm")
@@ -50,7 +52,7 @@ CYTO_DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "cyto")
 def _load_mito_bundle_fa(key):
     text = open(MITO_BUNDLE_PATH, encoding="utf-8").read()
     chunks = re.split(r"^==> (.+?) <==\n", text, flags=re.MULTILINE)[1:]
-    bundle = {name: content for name, content in zip(chunks[0::2], chunks[1::2])}
+    bundle = dict(zip(chunks[0::2], chunks[1::2]))
     seqs, cur = {}, None
     for line in bundle[key].splitlines():
         if line.startswith(">"):
@@ -136,7 +138,8 @@ def test_process_one_record_populates_rnafold_only_ss_for_patched_sequences():
     seqs = _load_mito_bundle_fa("canonical.fa")
     val_key = next(k for k in seqs if "Val|UAC|Homo" in k)
     armless = mito.index_armless_cms(MITO_ARMLESS_CM_DIR)
-    result = mito.process_mito_record((val_key, seqs[val_key], MITO_CANONICAL_CM, armless, False))
+    result = mito.process_mito_record(
+        (val_key, seqs[val_key], MITO_CANONICAL_CM, armless, False, False))
     assert result["cm_only_ss"] is not None
     assert result["rnafold_only_ss"] is not None
     assert result["rnafold_only_ss"] != result["cm_only_ss"]
@@ -219,7 +222,7 @@ def test_select_cm_and_align_routing_and_no_unlabeled():
         unlabeled = [i for i in range(len(final_seq)) if i not in sprinzl]
         return routing, unlabeled
 
-    # canonical: not rerouted
+    # a canonical tRNA stays on its canonical CM
     for fa_key, seq_key in [("canonical_T_human.fa", "mtdbD00063518|Thr|UGU|Homo_sapiens"),
                             ("canonical_E_human.fa", "mtdbD00063517|Glu|UUC|Homo_sapiens")]:
         routing, unlabeled = _pipeline(seq_key, _load_mito_bundle_fa(fa_key)[seq_key])
@@ -463,7 +466,7 @@ def test_process_cyto_record_synthetic_consensus(domain):
     isotype_index = cyto.index_isotype_cms(cm_db_path)
     for header, seq in seqs.items():
         aa = common.header_to_aa(header)
-        result = cyto.process_cyto_record((header, seq, cm_db_path, isotype_index, False))
+        result = cyto.process_cyto_record((header, seq, cm_db_path, isotype_index, False, False))
         assert result["summary"] == f"CM:{domain}-{aa}", header
         assert len(result["rows"]) == len(seq), header
         assert all(row["sprinzl_position"] for row in result["rows"]), header
@@ -479,9 +482,61 @@ def test_process_cyto_record_real_isotype_numbered_headers(domain):
     isotype_index = cyto.index_isotype_cms(cm_db_path)
     for header_substr in CYTO_REAL_ISOTYPE_CASES[domain]:
         header = next(h for h in seqs if header_substr in h)
-        result = cyto.process_cyto_record((header, seqs[header], cm_db_path, isotype_index, False))
+        result = cyto.process_cyto_record(
+            (header, seqs[header], cm_db_path, isotype_index, False, False))
         assert result["summary"].startswith("CM:"), header
         assert result["rows"], header
+
+
+CONSERVED_POSITIONS_PATH = os.path.join(os.path.dirname(__file__), "data", "conserved_positions.tsv")
+
+
+def _load_conserved_positions():
+    rows = []
+    with open(CONSERVED_POSITIONS_PATH, encoding="utf-8") as fh:
+        for line in fh:
+            if line.startswith("#") or not line.strip():
+                continue
+            position, base, min_fraction, _measured = line.split()
+            rows.append((position, base, float(min_fraction)))
+    return rows
+
+
+@pytest.fixture(scope="module")
+def euk_gtrnadb_bases_by_position():
+    """sprinzl_position -> bases assigned to it across the whole euk GtRNAdb set."""
+    seqs = _load_fasta_file(os.path.join(CYTO_DATA_DIR, "euk_gtrnadb.fa"))
+    cm_db_path = cyto.default_cm_db_path("euk")
+    isotype_index = cyto.index_isotype_cms(cm_db_path)
+    tasks = [(header, seq, cm_db_path, isotype_index, False, 1) for header, seq in seqs.items()]
+    with multiprocessing.Pool(4) as pool:
+        results = pool.map(cyto.process_cyto_record, tasks)
+
+    by_position = {}
+    for result in results:
+        for row in result["rows"]:
+            if row["sprinzl_position"]:
+                by_position.setdefault(row["sprinzl_position"], []).append(row["nucleotide"])
+    return by_position
+
+
+@need_cmalign_only
+def test_conserved_positions_carry_expected_bases(euk_gtrnadb_bases_by_position):
+    """labels that slip off their column stop landing on the base their Sprinzl
+    position is known to carry, which shows up here as the fraction falling
+    through the floor. Every position is reported at once, since one shift
+    usually drags its neighbours with it."""
+    failures = []
+    for position, base, min_fraction in _load_conserved_positions():
+        observed = euk_gtrnadb_bases_by_position.get(position, [])
+        if not observed:
+            failures.append(f"{position}: no sequence was labeled with this position")
+            continue
+        fraction = observed.count(base) / len(observed)
+        if fraction < min_fraction:
+            failures.append(f"{position}: {base} in {fraction:.3f} of {len(observed)} "
+                            f"sequences, under the {min_fraction} floor")
+    assert not failures, "conserved positions below their floor:\n  " + "\n  ".join(failures)
 
 
 if __name__ == "__main__":

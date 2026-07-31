@@ -560,7 +560,8 @@ def locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm=None):
         return [p for p in range(a, b) if ss[p] == "."]
 
     def loop_contains_anticodon(idx):
-        return ac and ac in "".join(seq[p] for p in direct_loop(idx, inner_stems[idx]))
+        loop_bases = "".join(seq[p] for p in direct_loop(idx, inner_stems[idx]) if seq[p] not in "-.")
+        return ac and ac in loop_bases.upper().replace("T", "U")
 
     ac = (anticodon or "").upper().replace("T", "U")
     by_position = sorted(range(n_stems), key=lambda i: inner_stems[i]["stem5_cols"][0])
@@ -845,3 +846,546 @@ def _fill_stem_bulges(labels, ss, strands):
             next_ord[last_label] = n + 1
             letter = chr(ord("A") + n) if n < 26 else f"A{chr(ord('A') + n - 26)}"
             labels[i] = f"{last_label}{letter}"
+
+
+# --- alignment-column-aware Sprinzl assignment ---
+#
+# A CM's ss_cons marks every alignment column as match-state or insert-state,
+# fixed for that CM regardless of which sequence is aligned to it: literal '.'
+# is an insert column, anything else is a match column. sprinzl_map_from_alignment
+# reads that per-column status straight off cmalign's raw output and assigns
+# each block by walking its columns in 5'->3' order against two label pools:
+# a core pool (the block's plain Sprinzl numbers) advanced by every
+# match-state column, and an optional insertion pool (named codes like 17a)
+# drawn on by occupied insert-state columns.
+#
+# Worked example, D-loop core positions 14-21 with insertion pools
+# {"17": ["17a"], "20": ["20a", "20b"]}: four occupied match columns advance
+# the core pool to 14, 15, 16, 17 in turn, each getting that label. An
+# occupied insert column right after draws "17a" from 17's pool (the pool
+# key is whichever core label the pointer last advanced to - not a running
+# count of insertions seen so far). Two match-state deletions then advance
+# the core pool through 18 and 19 silently: the pool still moves, but a
+# deletion has no base to attach a label to. Two more occupied match columns
+# take 20 and 21; an insert column right after 20 draws "20a" (
+# the pointer has since moved past 20). Once both the core pool (8 slots)
+# and the current label's insertion pool are exhausted, any further occupied
+# column gets a generic letter suffix on the last label used (e.g. "21A").
+#
+# This all stays in raw (unstripped) column space, so parse_topology and
+# locate_anticodon_stem take the CM's own ss_cons dot-bracket collapse
+# directly: it is well-formed on its own, fixed per CM, with no per-sequence
+# gap bookkeeping required to call them.
+
+
+def _next_suffix(anchor, counts):
+    """anchor + next unused letter (A, B, ..., Z, AA, ...); counts is shared
+    across a block's calls so overflow letters for one anchor stay sequential."""
+    n = counts.get(anchor, 0)
+    counts[anchor] = n + 1
+    letter = chr(ord("A") + n) if n < 26 else f"A{chr(ord('A') + n - 26)}"
+    return f"{anchor}{letter}"
+
+
+def _iter_block_labels(cols, core_slots, is_match, is_occupied, insertion_pools,
+                        suffix_counts, anchor=None):
+    """yield (col, label) for every occupied column in cols, running the core-pool
+    / insertion-pool / overflow state machine described above.
+
+    is_match(col) and is_occupied(col) classify each column; insertion_pools
+    is {core_label: [reserved_codes]}; suffix_counts accumulates overflow
+    letters per anchor label so repeated calls for one block stay sequential.
+
+    anchor seeds the running label with the preceding block's last one, so an
+    insert-state column at this block's 5' edge (reached before any core slot
+    is consumed) still has something to suffix onto: a D-loop leading insert
+    becomes 13A, off the last D-stem-5' position."""
+    exhausted = object()
+    core_iter = iter(core_slots)
+    pool_used = defaultdict(int)
+    # current stays the last CORE label, so consecutive overflows read 60A,
+    # 60B, 60C rather than compounding into 60A, 60AA, 60AAA.
+    current, label = anchor, None
+    for col in cols:
+        occ = is_occupied(col)
+        if is_match(col):
+            nxt = next(core_iter, exhausted)
+            if nxt is not exhausted:
+                current = nxt
+                label = current if occ else None
+            elif occ and current is not None:
+                label = _next_suffix(current, suffix_counts)
+            else:
+                label = None
+        elif occ and current is not None:
+            pool = insertion_pools.get(current, ())
+            used = pool_used[current]
+            if used < len(pool):
+                label, pool_used[current] = pool[used], used + 1
+            else:
+                label = _next_suffix(current, suffix_counts)
+        else:
+            label = None
+        if label is not None:
+            yield col, label
+
+
+def _is_occupied(aligned_seq, col):
+    return aligned_seq[col] not in "-."
+
+
+def _occupied_count(aligned_seq, cols):
+    return sum(1 for c in cols if _is_occupied(aligned_seq, c))
+
+
+def _raw_to_final_index(aligned_seq):
+    """{raw_col: index_in_finalize_structure's_ungapped_seq} for every occupied
+    column, in order - the coordinate translation assign_block needs to write
+    labels keyed the same way sprinzl_map's caller-visible labels dict is."""
+    raw_to_final, n = {}, 0
+    for col, ch in enumerate(aligned_seq):
+        if ch not in "-.":
+            raw_to_final[col] = n
+            n += 1
+    return raw_to_final
+
+
+def _split_occupied(aligned_seq, cols, n_head, n_tail):
+    """split cols into (head, middle, tail): head/tail hold exactly n_head/
+    n_tail occupied columns each; an interleaved gap column rides along with
+    whichever side owns the adjacent occupied column."""
+    occ_idx = [i for i, c in enumerate(cols) if _is_occupied(aligned_seq, c)]
+    head_end = occ_idx[n_head - 1] + 1 if n_head else 0
+    tail_start = occ_idx[-n_tail] if n_tail else len(cols)
+    return cols[:head_end], cols[head_end:tail_start], cols[tail_start:]
+
+
+def _assign_block(labels, cols, core_slots, ss_cons, aligned_seq, raw_to_final,
+                   insertion_pools=None, suffix_counts=None, anchor=None):
+    """write labels[raw_to_final[col]] for one Sprinzl block, per
+    _iter_block_labels, reading match/insert state from ss_cons. returns the
+    last label written, for the next block to anchor on (or anchor unchanged
+    if this block wrote nothing)."""
+    is_match = lambda col: ss_cons[col] != "."
+    last = anchor
+    for col, label in _iter_block_labels(
+            cols, core_slots, is_match, lambda col: _is_occupied(aligned_seq, col),
+            insertion_pools or {}, suffix_counts if suffix_counts is not None else {},
+            anchor=anchor):
+        labels[raw_to_final[col]] = label
+        last = label
+    return last
+
+
+def _assign_plain_zip(labels, cols, core_slots, aligned_seq, raw_to_final,
+                       suffix_counts=None, anchor=None):
+    """assign core_slots, in order, to cols' occupied columns only, skipping
+    gaps entirely rather than treating them as match-state deletions that
+    advance the pool with no output. for blocks where match/insert-state
+    carries no reliable Sprinzl meaning: the CCA trailer, which sits past the
+    model's own consensus structure, and any block holding exactly as many
+    bases as slots. returns the last label written, same contract as
+    _assign_block."""
+    suffix_counts = {} if suffix_counts is None else suffix_counts
+    exhausted = object()
+    core_iter = iter(core_slots)
+    current = anchor
+    last = anchor
+    for col in cols:
+        if aligned_seq[col] in "-.":
+            continue
+        nxt = next(core_iter, exhausted)
+        if nxt is not exhausted:
+            current = label = nxt
+        elif current is not None:
+            label = _next_suffix(current, suffix_counts)
+        else:
+            continue
+        labels[raw_to_final[col]] = label
+        last = label
+    return last
+
+
+def _assign_anticodon_loop_block(labels, cols, ss_cons, aligned_seq, raw_to_final,
+                                  anticodon, suffix_counts, anchor=None):
+    """locate the anticodon among the loop's occupied columns (centered-match,
+    same anchoring as _assign_anticodon_loop), then run the flanking
+    raw-column ranges through _assign_block so an indel there is handled by
+    the same core/insertion-pool rule as every other block. returns the last
+    label written, same contract as _assign_block."""
+    ac = (anticodon or "").upper().replace("T", "U")
+    occ_idx = [i for i, c in enumerate(cols) if _is_occupied(aligned_seq, c)]
+    loop_seq = "".join(aligned_seq[cols[i]] for i in occ_idx).upper().replace("T", "U")
+    matches = [m.start() for m in re.finditer(f"(?={re.escape(ac)})", loop_seq)] if ac else []
+    if not matches:
+        return _assign_block(labels, cols, [str(i) for i in range(32, 39)], ss_cons,
+                             aligned_seq, raw_to_final, suffix_counts=suffix_counts,
+                             anchor=anchor)
+
+    center = (len(loop_seq) - 3) / 2
+    ac_start = min(matches, key=lambda i: abs(i - center))
+    ac_occ = occ_idx[ac_start:ac_start + 3]
+    before, ac_cols, after = cols[:ac_occ[0]], cols[ac_occ[0]:ac_occ[-1] + 1], cols[ac_occ[-1] + 1:]
+
+    n_before = _occupied_count(aligned_seq, before)
+    before_slots = ([str(i) for i in range(34 - n_before, 34)] if n_before <= 2 else ["32", "33"])
+    last = _assign_block(labels, before, before_slots, ss_cons, aligned_seq, raw_to_final,
+                         suffix_counts=suffix_counts, anchor=anchor)
+    for i, c in enumerate(c for c in ac_cols if _is_occupied(aligned_seq, c)):
+        if i < 3:
+            labels[raw_to_final[c]] = str(34 + i)
+            last = str(34 + i)
+    return _assign_block(labels, after, ["37", "38"], ss_cons, aligned_seq, raw_to_final,
+                         suffix_counts=suffix_counts, anchor=last)
+
+
+# a D-loop shorter than its eight slots loses length at the dihydrouridine
+# positions, so 16, 17 and 20 give their bases up before 14, 15, 18, 19 and 21,
+# which Biela et al. 2023 lists among the nucleotides conserved across tRNAs.
+D_LOOP_DROP_ORDER = ["17", "20", "16", "19", "18"]
+
+# the D-loop takes its extra bases at 20a/20b far more often than at 17a
+D_LOOP_INSERTION_ORDER = ["20a", "20b", "17a"]
+
+
+def _shrink_slots(core_slots, n_bases, drop_order):
+    """core_slots cut down to n_bases entries, dropping in drop_order and
+    keeping the rest in Sprinzl order. Leaving the choice to the CM instead puts
+    the gap wherever its deletions fell, which strands a conserved position."""
+    dropped = set(drop_order[:len(core_slots) - n_bases])
+    return [slot for slot in core_slots if slot not in dropped]
+
+
+def _expand_slots(core_slots, n_bases, insertion_pools, code_order=()):
+    """core_slots grown toward n_bases by spending reserved insertion codes at
+    their anchors. Bases beyond the core count give the number of insertions,
+    so every core slot keeps a base and the spares take the reserved codes.
+    code_order picks which codes go first; anything left over follows in
+    anchor order."""
+    extra = n_bases - len(core_slots)
+    available = [(slot, code) for slot in core_slots for code in insertion_pools.get(slot, ())]
+    ranked = sorted(available, key=lambda sc: (code_order.index(sc[1])
+                                               if sc[1] in code_order else len(code_order)))
+    spend = {code for _, code in ranked[:max(extra, 0)]}
+    grown = []
+    for slot in core_slots:
+        grown.append(slot)
+        grown.extend(code for code in insertion_pools.get(slot, ()) if code in spend)
+    return grown
+
+
+def _absorb_unclaimed_columns(specs):
+    """extend each block to cover every column up to the next block's start,
+    given specs already sorted by start column.
+
+    forgi reports a stem's paired columns only, so a stem-internal bulge lands
+    in no block's own column list and would otherwise go unlabeled. Handing it
+    to the block it sits inside puts it through the same insertion rule as any
+    other unpaired column, which suffixes it onto the label before it."""
+    out = []
+    for i, (cols, core_slots, pools, mode) in enumerate(specs):
+        if i + 1 < len(specs):
+            cols = list(range(cols[0], specs[i + 1][0][0]))
+        out.append((cols, core_slots, pools, mode))
+    return out
+
+
+def sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None, wc=False, header=""):
+    """assign a Sprinzl label to every occupied column by reading match/
+    insert/deletion status directly off cmalign's raw output (see module
+    note above).
+
+    - alignment: cmalign_one's return dict (raw aligned_seq/ss_cons, gapped).
+    - anticodon, missing_arm: same meaning as sprinzl_map.
+    - wc: how far a stem may be re-seated by base-pairing first (see
+      slide_stems_to_improve_pairing); 0 skips it. sliding is by occupied
+      columns, so a step moves the helix one base.
+    - a sequence whose structure did not come from cmalign has no match/insert
+      state to read and belongs on sprinzl_map instead; see mito's
+      threading-failure branch.
+    - returns {final_seq_index: label}, where final_seq_index matches
+      finalize_structure's ungapped/uppercased seq (same base order) - pair
+      with finalize_structure(alignment) for final_seq/final_ss."""
+    aligned_seq, ss_cons = alignment["aligned_seq"], alignment["ss_cons"]
+    raw_to_final = _raw_to_final_index(aligned_seq)
+    ss_cons = slide_stems_in_alignment(aligned_seq, ss_cons, max_slide=wc, header=header)
+    raw_db = drop_orphan_brackets(RNA.db_from_WUSS(ss_cons))
+    topo = parse_topology(raw_db)
+    arms = locate_anticodon_stem(topo, raw_db, aligned_seq, anticodon, missing_arm)
+
+    specs = []
+
+    def block(cols, core_slots, insertion_pools=None, mode=None):
+        if cols:
+            specs.append((list(cols), core_slots, insertion_pools, mode))
+
+    def zip_block(cols, core_slots):
+        if cols:
+            specs.append((list(cols), core_slots, None, "zip"))
+
+    block(topo["acceptor_5"], [str(i) for i in range(1, 8)])
+    block(topo["acceptor_3"], [str(i) for i in range(66, 73)])
+    zip_block(topo["trailer"], ["73", "74", "75", "76"])
+
+    d_loop_pools = {"17": ["17a"], "20": ["20a", "20b"]}
+    if arms["d_stem5"]:
+        block(arms["linker_5"], ["8", "9"])
+        block(arms["d_stem5"], [str(i) for i in range(10, 14)])
+        block(arms["d_loop"], [str(i) for i in range(14, 22)], d_loop_pools, mode="d_loop")
+        block(arms["d_stem3"], [str(i) for i in range(22, 26)])
+        block(arms["linker_dc"], ["26"])
+    else:
+        # d-armless: the replacement loop occupies positions 8-26 in one run,
+        # with the same reserved D-loop insertion codes at the same anchors.
+        block(arms["linker_5"], [
+            "8", "9", "10", "11", "12", "13",
+            "14", "15", "16", "17", "18", "19", "20", "21",
+            "22", "23", "24", "25", "26",
+        ], d_loop_pools)
+
+    block(arms["c_stem5"], [str(i) for i in range(27, 32)])
+    if arms["c_loop"]:
+        specs.append((list(arms["c_loop"]), None, None, "anticodon"))
+    block(arms["c_stem3"], [str(i) for i in range(39, 44)])
+
+    if arms["v_stem5"]:
+        n_ct = _occupied_count(aligned_seq, arms["ct_linker"])
+        ct_slots = [str(i) for i in range(46 - n_ct, 46)] if n_ct <= 2 else ["44", "45"]
+        block(arms["ct_linker"], ct_slots)
+        block(arms["v_stem5"], [f"e1{i}" for i in range(1, 8)])
+        block(arms["v_loop"], [f"e{i}" for i in range(1, 6)])
+        n3 = min(_occupied_count(aligned_seq, arms["v_stem3"]), 7)
+        block(arms["v_stem3"], [f"e2{k}" for k in range(n3, 0, -1)])
+        block(arms["vt_linker"], ["46", "47", "48"])
+    elif _occupied_count(aligned_seq, arms["var_loop"]) > 5:
+        before, middle, after = _split_occupied(aligned_seq, arms["var_loop"], 2, 3)
+        block(before, ["44", "45"])
+        block(middle, [f"e{i}" for i in range(1, 6)])
+        block(after, ["46", "47", "48"])
+    else:
+        block(arms["var_loop"], ["44", "45", "46", "47", "48"])
+
+    block(arms["t_stem5"], [str(i) for i in range(49, 54)])
+    block(arms["t_loop"], [str(i) for i in range(54, 61)])
+    block(arms["t_stem3"], [str(i) for i in range(61, 66)])
+
+    specs.sort(key=lambda spec: spec[0][0])
+    specs = _absorb_unclaimed_columns(specs)
+
+    labels, suffix_counts, anchor = {}, {}, None
+    for cols, core_slots, pools, mode in specs:
+        # a block holding exactly as many bases as it has slots has only one
+        # consistent labelling, so the CM's view of which columns are
+        # matches carries no extra information there - and acting on it does
+        # harm when the CM threaded the block poorly, which mt-tRNA loops
+        # frequently do (bases parked in insert columns while the consensus
+        # columns beside them are called deletions). read match/insert state
+        # only where the counts disagree and the placement is in question.
+        n_bases = _occupied_count(aligned_seq, cols)
+        if mode == "d_loop" and core_slots:
+            if n_bases < len(core_slots):
+                core_slots = _shrink_slots(core_slots, n_bases, D_LOOP_DROP_ORDER)
+            elif n_bases > len(core_slots):
+                core_slots = _expand_slots(core_slots, n_bases, pools or {},
+                                           D_LOOP_INSERTION_ORDER)
+        exact_fit = core_slots is not None and n_bases == len(core_slots)
+        if mode == "anticodon":
+            anchor = _assign_anticodon_loop_block(labels, cols, ss_cons, aligned_seq,
+                                                   raw_to_final, anticodon, suffix_counts,
+                                                   anchor=anchor)
+        elif mode == "zip" or exact_fit:
+            anchor = _assign_plain_zip(labels, cols, core_slots, aligned_seq, raw_to_final,
+                                        suffix_counts, anchor=anchor)
+        else:
+            anchor = _assign_block(labels, cols, core_slots, ss_cons, aligned_seq,
+                                    raw_to_final, pools, suffix_counts, anchor=anchor)
+    return labels
+# --- stem register correction (--wc) ---
+
+# a helix seated further off than this is a threading failure, handled by
+# mito's RNAfold patch instead
+MAX_STEM_SLIDE = 2
+
+
+def slide_offsets(max_slide):
+    """offsets to try, nearest first, so the smallest move that gains wins."""
+    return sorted([d for d in range(-max_slide, max_slide + 1) if d],
+                  key=lambda d: (abs(d), d))
+
+
+def _stem_pairs(ss, group):
+    """(5' col, 3' col) for each paired column of one stem group, read from the
+    pair table so a merged stem with a bulge keeps its true partners."""
+    pt = RNA.ptable(ss)
+    return [(i, pt[i + 1] - 1) for i in group["stem5_cols"] if pt[i + 1] > i + 1]
+
+
+def _pair_cols(pairs):
+    return {col for pair in pairs for col in pair}
+
+
+def _count_wc(seq, pairs):
+    return sum(1 for i, j in pairs if (seq[i], seq[j]) in WC_PAIRS)
+
+
+def wuss_stems(ss_cons):
+    """internal stems as [{'pairs': [(5' col, 3' col), ...]}, ...], 5'->3'.
+    e.g. [{'pairs': [(10,25), (11,24), (12,23)]}, {'pairs': [(49,65), (50,64), (51,63)]}]
+
+    WUSS marks the acceptor stem '(' ')' and every internal stem '<' '>', so
+    the arms come from the consensus line. 
+    Nested pairs belong to one stem; a disjoint span
+    starts the next."""
+    stack, pairs = [], []
+    for col, sym in enumerate(ss_cons):
+        if sym == "<":
+            stack.append(col)
+        elif sym == ">" and stack:
+            pairs.append((stack.pop(), col))
+    stems = []
+    for i, j in sorted(pairs):
+        if stems and i < stems[-1]["pairs"][-1][1]:
+            stems[-1]["pairs"].append((i, j))
+        else:
+            stems.append({"pairs": [(i, j)]})
+    return stems
+
+
+def _occupied_cols(aligned_seq):
+    return [c for c, ch in enumerate(aligned_seq) if ch not in "-."]
+
+
+def _column_offset_for_bases(aligned_seq, edge, steps, direction, taken):
+    """columns from `edge` out to the `steps`-th free base beyond it, in
+    `direction`.
+
+    Only columns holding a base count, so deletions are stepped over, and
+    only columns no other helix owns, so the count never runs through a
+    neighbouring stem. Returns None when another helix or the end of the
+    sequence arrives first: with no free base to move onto, there is nothing
+    to slide."""
+    seen, col = 0, edge + direction
+    while 0 <= col < len(aligned_seq):
+        if col in taken:
+            return None
+        if aligned_seq[col] not in "-.":
+            seen += 1
+            if seen == steps:
+                return abs(col - edge)
+        col += direction
+    return None
+
+
+def slide_stems_in_alignment(aligned_seq, ss_cons, max_slide=1, header=""):
+    """re-seat internal stems on the consensus line; returns a new ss_cons.
+
+    The whole helix moves by one column offset, so it stays a helix. The
+    offset is measured in free bases rather than columns: one step lands on
+    the next base that no other helix owns, stepping over deletions.
+
+    The anticodon stem stays put, since the numbering is anchored to it, and
+    the acceptor stem is '(' ')' in WUSS so it is never a candidate. A move
+    needs a strict gain in WC/wobble pairs. max_slide of 0 disables sliding;
+    ss_cons also comes back unchanged when the anticodon stem cannot be
+    identified by stem count."""
+    if max_slide < 1:
+        return ss_cons
+    stems = wuss_stems(ss_cons)
+    frozen_idx = EXPECTED_ANTICODON_ARM_INDEX.get(len(stems))
+    if frozen_idx is None:
+        logger.debug(f"{header}: {len(stems)} internal stems, cannot tell which is the "
+                     f"anticodon arm; leaving the structure alone")
+        return ss_cons
+
+    paired = {c for c, sym in enumerate(ss_cons) if sym in "<>()"}
+    out = list(ss_cons)
+    for idx, stem in enumerate(stems):
+        if idx == frozen_idx:
+            continue
+        pairs = stem["pairs"]
+        cols = {c for p in pairs for c in p}
+        taken = paired - cols
+        base = _count_wc(aligned_seq, pairs)
+        for steps in range(1, max_slide + 1):
+            moved = _best_slide(aligned_seq, pairs, min(cols), max(cols), steps, taken, base)
+            if moved is None:
+                continue
+            for i, j in pairs:
+                out[i] = out[j] = ","
+            for i, j in moved:
+                out[i], out[j] = "<", ">"
+            logger.info(f"{header}: re-seated a stem by {steps} base(s) "
+                        f"({base} -> {_count_wc(aligned_seq, moved)} of {len(pairs)} "
+                        f"pairs complementary)")
+            break
+    return "".join(out)
+
+
+def _best_slide(aligned_seq, pairs, edge5, edge3, steps, taken, base):
+    """moved pairs for a `steps`-base slide either way, or None if neither
+    direction is reachable or improves on `base`."""
+    for direction, edge in ((-1, edge5), (1, edge3)):
+        delta = _column_offset_for_bases(aligned_seq, edge, steps, direction, taken)
+        if delta is None:
+            continue
+        moved = [(i + direction * delta, j + direction * delta) for i, j in pairs]
+        cols = {c for p in moved for c in p}
+        if cols & taken or min(cols) < 0 or max(cols) >= len(aligned_seq):
+            continue
+        if _count_wc(aligned_seq, moved) > base:
+            return moved
+    return None
+
+
+def slide_stems_to_improve_pairing(seq, ss, anticodon, missing_arm=None, header="",
+                                    max_slide=1):
+    """re-seat stems that pair better a position or two along; returns the
+    corrected dot-bracket structure.
+
+    For a gap-free structure, where one position is one base. The alignment
+    equivalent is slide_stems_in_alignment; mito's RNAfold-patched arms come
+    here instead, having a fold but no alignment behind them.
+
+    Both strands move by one offset, so a stem keeps its length, bulges and
+    loop and only changes position. A slide needs a strict gain in WC/wobble
+    pairs, takes the smallest offset that gives one, and may not land on
+    another stem's columns. max_slide bounds how far it may travel. The
+    acceptor and anticodon stems stay put, since the rest of the numbering is
+    anchored to them.
+
+    Human MT-TS1 motivates this: every canonical CM in the library seats its
+    D-stem with two mismatched pairs, one base off a fully paired register."""
+    topo = parse_topology(ss)
+    arms = locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm)
+    frozen = set(topo["acceptor_5"] + topo["acceptor_3"] + arms["c_stem5"] + arms["c_stem3"])
+
+    groups = _forgi_stem_groups(ss)
+    owned = {c for g in groups for c in g["stem5_cols"] + g["stem3_cols"]}
+
+    moves = []
+    for group in groups:
+        pairs = _stem_pairs(ss, group)
+        cols = _pair_cols(pairs)
+        if not pairs or cols & frozen:
+            continue
+        blocked = owned - cols
+        for offset in slide_offsets(max_slide):
+            moved = [(i + offset, j + offset) for i, j in pairs]
+            new_cols = _pair_cols(moved)
+            if min(new_cols) < 0 or max(new_cols) >= len(seq) or new_cols & blocked:
+                continue
+            if _count_wc(seq, moved) > _count_wc(seq, pairs):
+                moves.append((pairs, moved))
+                break
+
+    out = list(ss)
+    for pairs, moved in moves:
+        logger.info(f"{header}: re-seated a stem by {moved[0][0] - pairs[0][0]:+d} "
+                    f"({_count_wc(seq, pairs)} -> {_count_wc(seq, moved)} of "
+                    f"{len(pairs)} pairs complementary)")
+        for i, j in pairs:
+            out[i] = out[j] = "."
+    for _, moved in moves:
+        for i, j in moved:
+            out[i], out[j] = "(", ")"
+    return "".join(out)
