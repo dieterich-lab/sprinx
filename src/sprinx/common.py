@@ -1042,10 +1042,18 @@ def _assign_anticodon_loop_block(labels, cols, ss_cons, aligned_seq, raw_to_fina
 # a D-loop shorter than its eight slots loses length at the dihydrouridine
 # positions, so 16, 17 and 20 give their bases up before 14, 15, 18, 19 and 21,
 # which Biela et al. 2023 lists among the nucleotides conserved across tRNAs.
+# Order taken from Suzuki et al. 2020's curated human mt-tRNAs.
 D_LOOP_DROP_ORDER = ["17", "20", "16", "19", "18"]
 
 # the D-loop takes its extra bases at 20a/20b far more often than at 17a
 D_LOOP_INSERTION_ORDER = ["20a", "20b", "17a"]
+
+# a short T-loop empties from its ends inward, alternating 3' then 5', and keeps
+# the 56-58 core. Reproduces every T-loop in Suzuki et al. 2020's curated human
+# mt-tRNAs.
+T_LOOP_DROP_ORDER = ["60", "54", "59", "55"]
+
+SLOT_DROP_ORDER = {"d_loop": D_LOOP_DROP_ORDER, "t_loop": T_LOOP_DROP_ORDER}
 
 
 def _shrink_slots(core_slots, n_bases, drop_order):
@@ -1166,7 +1174,7 @@ def sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None, wc=False,
         block(arms["var_loop"], ["44", "45", "46", "47", "48"])
 
     block(arms["t_stem5"], [str(i) for i in range(49, 54)])
-    block(arms["t_loop"], [str(i) for i in range(54, 61)])
+    block(arms["t_loop"], [str(i) for i in range(54, 61)], mode="t_loop")
     block(arms["t_stem3"], [str(i) for i in range(61, 66)])
 
     specs.sort(key=lambda spec: spec[0][0])
@@ -1182,9 +1190,10 @@ def sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None, wc=False,
         # columns beside them are called deletions). read match/insert state
         # only where the counts disagree and the placement is in question.
         n_bases = _occupied_count(aligned_seq, cols)
-        if mode == "d_loop" and core_slots:
+        drop_order = SLOT_DROP_ORDER.get(mode)
+        if drop_order and core_slots:
             if n_bases < len(core_slots):
-                core_slots = _shrink_slots(core_slots, n_bases, D_LOOP_DROP_ORDER)
+                core_slots = _shrink_slots(core_slots, n_bases, drop_order)
             elif n_bases > len(core_slots):
                 core_slots = _expand_slots(core_slots, n_bases, pools or {},
                                            D_LOOP_INSERTION_ORDER)

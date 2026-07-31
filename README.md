@@ -114,6 +114,19 @@ docstring at the top of [src/sprinx/mito.py](src/sprinx/mito.py).
 The CM naming convention and selection details are in the module docstring
 at the top of [src/sprinx/cyto.py](src/sprinx/cyto.py).
 
+### Stem re-seating (`--wc`)
+
+A CM sometimes seats a helix one position off. Before labeling, sprinx checks
+the neighbouring unpaired bases each internal stem could have paired with
+instead, and slides the whole stem there if that gives more Watson-Crick or
+wobble pairs. This is of concern for example when the stem is thermodynamically too short
+to be stable, e.g. a 2-bp D-stem that may not need RNAfold to be patched into
+a 3-bp stem using the adjacent bases.
+
+`--wc 1` (default) checks the adjacent register, `2` also checks one position
+further, `0` disables it. The anticodon stem never moves, since the numbering
+is anchored to it. Changing this changes labels on D- and T-stem bases.
+
 ## Dependencies not on PyPI
 
 - `cmalign`, from [Infernal](http://eddylab.org/infernal/) >=1.1.4. Not a
@@ -161,14 +174,14 @@ see "Layout" below.
 
 ## Limitations
 
-> **The `euk`/`arch`/`bact` schemes have no independent ground-truth set
-> yet.** CM selection and labeling have been checked against real GtRNAdb
-> sequences (hundreds per domain: correct alignment, correct anticodon
-> placement, structurally sound diagrams) and against each CM's own
-> consensus sequence. Neither is checked against literature-curated ground
-> truth the way `mito`'s fixtures are (see `data/mito/README.md`).
-> Note that cyto tRNAs are not expected to be truncated.
-
+- The `euk`/`arch`/`bact` schemes have no curated label set. CM selection and
+  labeling are tested against GtRNAdb sequences (hundreds per domain:
+  correct alignment, correct anticodon placement, structurally sound diagrams)
+  and against each CM's consensus sequence. `euk` labels are tested
+  against the nucleotides reported by Biela et al. 2023 review as conserved
+  (`tests/data/conserved_positions.tsv`). That test reads the base
+  under 11 positions. `arch` and `bact` have no such check.
+  Cytosolic tRNAs are not expected to be truncated and are better conserved.
 - The armless CMs (Ozerova et al. 2024) are mechanically truncated from
   canonical models, not retrained on armless sequences. They can mis-thread
   highly divergent armless mt-tRNAs.
@@ -183,8 +196,18 @@ see "Layout" below.
   physically cannot close a shorter hairpin.
 - When exactly 3 stem-loops are found, the 2nd is always assumed to be the
   anticodon arm and the 3rd the T-arm. There's no way to instead read the
-  3rd as a variable arm with the T-arm actually missing; that case isn't
+  3rd as a variable arm with the T-arm missing; that case isn't
   distinguished from an ordinary D-C-T cloverleaf with no variable arm.
+- A D-loop or T-loop shorter than expected drops positions in a fixed order,
+  hardcoded in `common.py`. The order comes from the positions Biela et al. 2023
+  reports as highly conserved. We checked it against Suzuki et al. 2020's 22
+  curated human mt-tRNAs. It applies to every sequence, whatever the clade.
+- An extra D-loop base takes 20a or 20b before 17a, because a eukaryotic D-loop
+  grows at 20 rather than at 17. Placing it at 17a pushes the conserved G18 and
+  G19 one slot later, which we measured on eukaryotic cytosolic tRNAs.
+  - Only mito has some curated labels to check this against. Every cytosolic
+    sequence we tested has a full 7-base T-loop, so T-loop shortening hasn't been
+    tested for them.
 
 ### Why not just pick the best-scoring model?
 
