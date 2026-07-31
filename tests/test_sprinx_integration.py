@@ -503,8 +503,11 @@ def _load_conserved_positions():
 
 
 @pytest.fixture(scope="module")
-def euk_gtrnadb_bases_by_position():
-    """sprinzl_position -> bases assigned to it across the whole euk GtRNAdb set."""
+def euk_gtrnadb_labels():
+    """name -> (base, sprinzl_position) per sequence position in 5'->3' order,
+    for the whole euk GtRNAdb set, with '' where sprinx assigned no label.
+    Labeling all 531 sequences costs about a minute, so the conserved-base and
+    CM-agreement tests share one run."""
     seqs = _load_fasta_file(os.path.join(CYTO_DATA_DIR, "euk_gtrnadb.fa"))
     cm_db_path = cyto.default_cm_db_path("euk")
     isotype_index = cyto.index_isotype_cms(cm_db_path)
@@ -512,11 +515,19 @@ def euk_gtrnadb_bases_by_position():
     with multiprocessing.Pool(4) as pool:
         results = pool.map(cyto.process_cyto_record, tasks)
 
+    return {header.split()[0]: [(row["nucleotide"], row["sprinzl_position"])
+                                for row in result["rows"]]
+            for header, result in zip(seqs, results)}
+
+
+@pytest.fixture(scope="module")
+def euk_gtrnadb_bases_by_position(euk_gtrnadb_labels):
+    """sprinzl_position -> bases assigned to it across the whole euk GtRNAdb set."""
     by_position = {}
-    for result in results:
-        for row in result["rows"]:
-            if row["sprinzl_position"]:
-                by_position.setdefault(row["sprinzl_position"], []).append(row["nucleotide"])
+    for rows in euk_gtrnadb_labels.values():
+        for base, label in rows:
+            if label:
+                by_position.setdefault(label, []).append(base)
     return by_position
 
 

@@ -114,6 +114,17 @@ docstring at the top of [src/sprinx/mito.py](src/sprinx/mito.py).
 The CM naming convention and selection details are in the module docstring
 at the top of [src/sprinx/cyto.py](src/sprinx/cyto.py).
 
+### Labeling shortened loops and retained bases
+
+An arm can hold fewer bases than CM reserves slots for, so some slots stay
+empty. Retained bases are the ones that typically form tertiary contacts,
+so they are labeled and other positions are dropped preferentially.
+
+In the variable region those retained typically are 44, 45, 46 and 48: G26-A44, G10-C25-G45,
+C13-G22-G46, and the Levitt pair G15-C48 (Biela et al. 2023). Each of them is mediated by a
+modified base. 47 typically has no such contact and empties first.
+The D-loop is similarly numbered outward from the conserved G18-G19 pair.
+
 ### Stem re-seating (`--wc`)
 
 A CM sometimes seats a helix one position off. Before labeling, sprinx checks
@@ -180,7 +191,7 @@ see "Layout" below.
   and against each CM's consensus sequence. `euk` labels are tested
   against the nucleotides reported by Biela et al. 2023 review as conserved
   (`tests/data/conserved_positions.tsv`). That test reads the base
-  under 11 positions. `arch` and `bact` have no such check.
+  under 12 positions. `arch` and `bact` have no such check.
   Cytosolic tRNAs are not expected to be truncated and are better conserved.
 - The armless CMs (Ozerova et al. 2024) are mechanically truncated from
   canonical models, not retrained on armless sequences. They can mis-thread
@@ -202,12 +213,11 @@ see "Layout" below.
   hardcoded in `common.py`. The order comes from the positions Biela et al. 2023
   reports as highly conserved. We checked it against Suzuki et al. 2020's 22
   curated human mt-tRNAs. It applies to every sequence, whatever the clade.
-- An extra D-loop base takes 20a or 20b before 17a, because a eukaryotic D-loop
-  grows at 20 rather than at 17. Placing it at 17a pushes the conserved G18 and
-  G19 one slot later, which we measured on eukaryotic cytosolic tRNAs.
-  - Only mito has some curated labels to check this against. Every cytosolic
-    sequence we tested has a full 7-base T-loop, so T-loop shortening hasn't been
-    tested for them.
+- The D-loop is seated on its G18-G19. A loop with no GG at the third, fourth or
+  fifth base falls back to counting slots from 14, which is 6 of the 531
+  eukaryotic cytosolic sequences we tested.
+- Only mito has some curated labels to check T-loop shortening against. Every
+  cytosolic sequence we tested has a full 7-base T-loop.
 
 ### Why not just pick the best-scoring model?
 

@@ -615,6 +615,10 @@ def locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm=None):
         # machinery (mito.classify_arm_loss) rather than guessed at here.
         v_candidates = [g for g in after if g is not t_stem]
         v_stem = v_candidates[0] if len(v_candidates) == 1 else None
+        # a sequence that deleted every base of the arm has no arm to number
+        if v_stem and not _occupied_count(seq, v_stem["stem5_cols"]
+                                          + v_stem["loop_cols"] + v_stem["stem3_cols"]):
+            v_stem = None
 
     # outermost D-stem 3' column (strand edge), so the connector (pos 26) starts
     # only after the whole D-stem 3' strand; a D-stem-internal 3' bulge sits
@@ -938,6 +942,10 @@ def _occupied_count(aligned_seq, cols):
     return sum(1 for c in cols if _is_occupied(aligned_seq, c))
 
 
+def _occupied_bases(aligned_seq, cols):
+    return [aligned_seq[c].upper() for c in cols if _is_occupied(aligned_seq, c)]
+
+
 def _raw_to_final_index(aligned_seq):
     """{raw_col: index_in_finalize_structure's_ungapped_seq} for every occupied
     column, in order - the coordinate translation assign_block needs to write
@@ -1053,14 +1061,50 @@ D_LOOP_INSERTION_ORDER = ["20a", "20b", "17a"]
 # mt-tRNAs.
 T_LOOP_DROP_ORDER = ["60", "54", "59", "55"]
 
-SLOT_DROP_ORDER = {"d_loop": D_LOOP_DROP_ORDER, "t_loop": T_LOOP_DROP_ORDER}
+# 44, 45, 46 and 48 each hold a tertiary contact: G26-A44, G10-C25-G45,
+# C13-G22-G46 and the Levitt pair G15-C48 (Biela et al. 2023). 47 holds none and
+# gives its base up first. Nothing orders the other four against each other, so
+# a block needing a second drop is left to the model.
+V_LOOP_DROP_ORDER = ["47"]
+
+SLOT_DROP_ORDER = {"d_loop": D_LOOP_DROP_ORDER, "t_loop": T_LOOP_DROP_ORDER,
+                   "v_loop": V_LOOP_DROP_ORDER}
+
+# slots either side of the conserved 18-19 pair, spent outward from it
+D_LOOP_5P_SLOTS = ["14", "15", "16", "17", "17a"]
+D_LOOP_3P_SLOTS = ["20", "20a", "20b"]
+
+
+def _d_loop_slots_from_gg(bases):
+    """slots for a D-loop, seating the GG that Biela et al. 2023 report at 18
+    and 19 on those two positions and spending the rest outward from it. None
+    when no GG sits close enough to 18 to be that pair.
+
+    Counting slots from 14 instead gets the common eight-base loop wrong: it
+    fills 14-21 solid, which lands the GG on 17-18, because 17 stays empty
+    until a loop is long enough to need it."""
+    n = len(bases)
+    for k in range(3, min(len(D_LOOP_5P_SLOTS), n - 2) + 1):
+        if bases[k] != "G" or bases[k + 1] != "G":
+            continue
+        after = n - k - 2
+        if after > len(D_LOOP_3P_SLOTS) + 1:
+            return None
+        # 21 closes the loop against the D-stem, so it takes the last base and
+        # 20/20a/20b fill the gap left in front of it
+        tail = D_LOOP_3P_SLOTS[:after - 1] + ["21"] if after else []
+        return D_LOOP_5P_SLOTS[:k] + ["18", "19"] + tail
+    return None
 
 
 def _shrink_slots(core_slots, n_bases, drop_order):
     """core_slots cut down to n_bases entries, dropping in drop_order and
     keeping the rest in Sprinzl order. Leaving the choice to the CM instead puts
     the gap wherever its deletions fell, which strands a conserved position."""
-    dropped = set(drop_order[:len(core_slots) - n_bases])
+    # an order may name slots this block does not have, and those must not
+    # count toward the number dropped
+    candidates = [slot for slot in drop_order if slot in core_slots]
+    dropped = set(candidates[:len(core_slots) - n_bases])
     return [slot for slot in core_slots if slot not in dropped]
 
 
@@ -1157,21 +1201,19 @@ def sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None, wc=False,
     block(arms["c_stem3"], [str(i) for i in range(39, 44)])
 
     if arms["v_stem5"]:
-        n_ct = _occupied_count(aligned_seq, arms["ct_linker"])
-        ct_slots = [str(i) for i in range(46 - n_ct, 46)] if n_ct <= 2 else ["44", "45"]
-        block(arms["ct_linker"], ct_slots)
+        block(arms["ct_linker"], ["44", "45"], mode="v_loop")
         block(arms["v_stem5"], [f"e1{i}" for i in range(1, 8)])
         block(arms["v_loop"], [f"e{i}" for i in range(1, 6)])
         n3 = min(_occupied_count(aligned_seq, arms["v_stem3"]), 7)
         block(arms["v_stem3"], [f"e2{k}" for k in range(n3, 0, -1)])
-        block(arms["vt_linker"], ["46", "47", "48"])
+        block(arms["vt_linker"], ["46", "47", "48"], mode="v_loop")
     elif _occupied_count(aligned_seq, arms["var_loop"]) > 5:
         before, middle, after = _split_occupied(aligned_seq, arms["var_loop"], 2, 3)
-        block(before, ["44", "45"])
+        block(before, ["44", "45"], mode="v_loop")
         block(middle, [f"e{i}" for i in range(1, 6)])
-        block(after, ["46", "47", "48"])
+        block(after, ["46", "47", "48"], mode="v_loop")
     else:
-        block(arms["var_loop"], ["44", "45", "46", "47", "48"])
+        block(arms["var_loop"], ["44", "45", "46", "47", "48"], mode="v_loop")
 
     block(arms["t_stem5"], [str(i) for i in range(49, 54)])
     block(arms["t_loop"], [str(i) for i in range(54, 61)], mode="t_loop")
@@ -1190,6 +1232,10 @@ def sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None, wc=False,
         # columns beside them are called deletions). read match/insert state
         # only where the counts disagree and the placement is in question.
         n_bases = _occupied_count(aligned_seq, cols)
+        if mode == "d_loop":
+            anchored = _d_loop_slots_from_gg(_occupied_bases(aligned_seq, cols))
+            if anchored:
+                core_slots = anchored
         drop_order = SLOT_DROP_ORDER.get(mode)
         if drop_order and core_slots:
             if n_bases < len(core_slots):
