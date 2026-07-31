@@ -28,4 +28,9 @@ jobs:
 
       - name: pytest
         shell: bash -el {0}
-        run: uv run pytest -q
+        # the mito integration tests locate their CMs through these, and both
+        # point into the repo; without them those tests skip
+        env:
+          SPRINX_CANONICAL_CM: ${{ github.workspace }}/data/mito/TRNAinf-euk.cm
+          SPRINX_ARMLESS_CM_DIR: ${{ github.workspace }}/src/sprinx/data/mito_cm/armless
+        run: uv run pytest -q -ra
