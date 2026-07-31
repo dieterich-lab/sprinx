@@ -1,0 +1,26 @@
+# Nucleotides conserved across tRNAs, per Biela et al. 2023, used to check that
+# a Sprinzl label lands on the base that position is known to carry.
+#
+# min_fraction is set below the value measured on data/cyto/euk_gtrnadb.fa (531
+# sequences) so ordinary variation does not fail the suite. A drop past it means
+# labels shifted, not that biology changed.
+#
+# Positions 19 and 21 are left out. Both are symptoms of one defect: in the
+# D-loop the pooled labeler spends its deletion on 21 rather than 17, so the
+# conserved GG pair lands on 17-18 instead of 18-19. Measured G19 0.26, A21 0.79
+# with 134 of 531 sequences carrying no 21 at all. Restore both rows once the
+# D-loop is anchored on the GG pair.
+#
+# Positions 74-76 are left out: the CCA end is not part of what sprinx labels.
+#
+# sprinzl_position	base	min_fraction	measured
+8	U	0.95	0.991
+14	A	0.95	0.989
+18	G	0.95	0.989
+33	U	0.95	0.985
+53	G	0.95	0.989
+54	U	0.90	0.947
+55	U	0.95	0.998
+56	C	0.95	0.962
+58	A	0.95	0.985
+61	C	0.95	0.979

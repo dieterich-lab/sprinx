@@ -2,7 +2,7 @@
 test_sprinx_unit.py: unit tests for sprinx.common and sprinx.mito.
 
 no subprocess calls; infernal not required. pre-computed cmalign Stockholm
-alignments are in test_data_bundle.txt (==> name <== markers, produced with
+alignments are in data/test_data_bundle.txt (==> name <== markers, produced with
 `cmalign --notrunc --nonbanded -g`). ViennaRNA (RNA module) is always present
 when sprinx is importable (hard import), so RNA API tests are unconditional.
 
@@ -19,7 +19,7 @@ import RNA
 
 from sprinx import common, mito
 
-MITO_BUNDLE_PATH = os.path.join(os.path.dirname(__file__), "test_data_bundle.txt")
+MITO_BUNDLE_PATH = os.path.join(os.path.dirname(__file__), "data", "test_data_bundle.txt")
 
 
 def load_mito_bundle():

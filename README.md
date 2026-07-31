@@ -321,7 +321,9 @@ data/
 tests/
   test_sprinx_unit.py          unit tests, run anywhere
   test_sprinx_integration.py   runs real cmalign / RNAfold end to end
-  test_data_bundle.txt         precomputed Stockholm alignments for the unit tests
+  data/
+    test_data_bundle.txt       precomputed Stockholm alignments for the unit tests
+    conserved_positions.tsv    nucleotides conserved across tRNAs, per Biela et al. 2023
 output/             example run artifacts (TSVs, PNGs)
 ```
 

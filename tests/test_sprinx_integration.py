@@ -16,6 +16,7 @@ run:
   SPRINX_CANONICAL_CM=data/mito/TRNAinf-euk.cm SPRINX_ARMLESS_CM_DIR=src/sprinx/data/mito_cm/armless/ \\
   pytest test_sprinx_integration.py -v
 """
+import multiprocessing
 import os
 import re
 import shutil
@@ -37,7 +38,7 @@ need_mito_armless = pytest.mark.skipif(
 # tests only need cmalign itself.
 need_cmalign_only = pytest.mark.skipif(not CMALIGN_OK, reason="requires cmalign in PATH")
 
-MITO_BUNDLE_PATH = os.path.join(os.path.dirname(__file__), "test_data_bundle.txt")
+MITO_BUNDLE_PATH = os.path.join(os.path.dirname(__file__), "data", "test_data_bundle.txt")
 MITO_DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "mito")
 MITO_CM_DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "src", "sprinx", "data", "mito_cm")
 MITO_BACT_CM = os.path.join(MITO_CM_DATA_DIR, "canonical", "TRNAinf-bact.cm")
@@ -484,6 +485,53 @@ def test_process_cyto_record_real_isotype_numbered_headers(domain):
             (header, seqs[header], cm_db_path, isotype_index, False, False))
         assert result["summary"].startswith("CM:"), header
         assert result["rows"], header
+
+
+CONSERVED_POSITIONS_PATH = os.path.join(os.path.dirname(__file__), "data", "conserved_positions.tsv")
+
+
+def _load_conserved_positions():
+    rows = []
+    with open(CONSERVED_POSITIONS_PATH, encoding="utf-8") as fh:
+        for line in fh:
+            if line.startswith("#") or not line.strip():
+                continue
+            position, base, min_fraction, _measured = line.split()
+            rows.append((position, base, float(min_fraction)))
+    return rows
+
+
+@pytest.fixture(scope="module")
+def euk_gtrnadb_bases_by_position():
+    """sprinzl_position -> bases assigned to it across the whole euk GtRNAdb set."""
+    seqs = _load_fasta_file(os.path.join(CYTO_DATA_DIR, "euk_gtrnadb.fa"))
+    cm_db_path = cyto.default_cm_db_path("euk")
+    isotype_index = cyto.index_isotype_cms(cm_db_path)
+    tasks = [(header, seq, cm_db_path, isotype_index, False, 1) for header, seq in seqs.items()]
+    with multiprocessing.Pool(4) as pool:
+        results = pool.map(cyto.process_cyto_record, tasks)
+
+    by_position = {}
+    for result in results:
+        for row in result["rows"]:
+            if row["sprinzl_position"]:
+                by_position.setdefault(row["sprinzl_position"], []).append(row["nucleotide"])
+    return by_position
+
+
+@need_cmalign_only
+@pytest.mark.parametrize(("position", "base", "min_fraction"), _load_conserved_positions())
+def test_conserved_position_carries_expected_base(
+        euk_gtrnadb_bases_by_position, position, base, min_fraction):
+    """labels that slip off their column stop landing on the base their Sprinzl
+    position is known to carry, which shows up here as the fraction falling
+    through the floor."""
+    observed = euk_gtrnadb_bases_by_position.get(position, [])
+    assert observed, f"no sequence was labeled with Sprinzl position {position}"
+    fraction = observed.count(base) / len(observed)
+    assert fraction >= min_fraction, (
+        f"Sprinzl {position} held {base} in {fraction:.3f} of {len(observed)} sequences, "
+        f"under the {min_fraction} floor")
 
 
 if __name__ == "__main__":
