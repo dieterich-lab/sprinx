@@ -521,18 +521,22 @@ def euk_gtrnadb_bases_by_position():
 
 
 @need_cmalign_only
-@pytest.mark.parametrize(("position", "base", "min_fraction"), _load_conserved_positions())
-def test_conserved_position_carries_expected_base(
-        euk_gtrnadb_bases_by_position, position, base, min_fraction):
+def test_conserved_positions_carry_expected_bases(euk_gtrnadb_bases_by_position):
     """labels that slip off their column stop landing on the base their Sprinzl
     position is known to carry, which shows up here as the fraction falling
-    through the floor."""
-    observed = euk_gtrnadb_bases_by_position.get(position, [])
-    assert observed, f"no sequence was labeled with Sprinzl position {position}"
-    fraction = observed.count(base) / len(observed)
-    assert fraction >= min_fraction, (
-        f"Sprinzl {position} held {base} in {fraction:.3f} of {len(observed)} sequences, "
-        f"under the {min_fraction} floor")
+    through the floor. Every position is reported at once, since one shift
+    usually drags its neighbours with it."""
+    failures = []
+    for position, base, min_fraction in _load_conserved_positions():
+        observed = euk_gtrnadb_bases_by_position.get(position, [])
+        if not observed:
+            failures.append(f"{position}: no sequence was labeled with this position")
+            continue
+        fraction = observed.count(base) / len(observed)
+        if fraction < min_fraction:
+            failures.append(f"{position}: {base} in {fraction:.3f} of {len(observed)} "
+                            f"sequences, under the {min_fraction} floor")
+    assert not failures, "conserved positions below their floor:\n  " + "\n  ".join(failures)
 
 
 if __name__ == "__main__":

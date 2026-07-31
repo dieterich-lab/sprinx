@@ -1039,6 +1039,20 @@ def _assign_anticodon_loop_block(labels, cols, ss_cons, aligned_seq, raw_to_fina
                          suffix_counts=suffix_counts, anchor=last)
 
 
+# a D-loop shorter than its eight slots loses length at the dihydrouridine
+# positions, so 16, 17 and 20 give their bases up before 14, 15, 18, 19 and 21,
+# which Biela et al. 2023 lists among the nucleotides conserved across tRNAs.
+D_LOOP_DROP_ORDER = ["17", "20", "16", "19", "18"]
+
+
+def _shrink_slots(core_slots, n_bases, drop_order):
+    """core_slots cut down to n_bases entries, dropping in drop_order and
+    keeping the rest in Sprinzl order. Leaving the choice to the CM instead puts
+    the gap wherever its deletions fell, which strands a conserved position."""
+    dropped = set(drop_order[:len(core_slots) - n_bases])
+    return [slot for slot in core_slots if slot not in dropped]
+
+
 def _absorb_unclaimed_columns(specs):
     """extend each block to cover every column up to the next block's start,
     given specs already sorted by start column.
@@ -1080,9 +1094,9 @@ def sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None, wc=False,
 
     specs = []
 
-    def block(cols, core_slots, insertion_pools=None):
+    def block(cols, core_slots, insertion_pools=None, mode=None):
         if cols:
-            specs.append((list(cols), core_slots, insertion_pools, None))
+            specs.append((list(cols), core_slots, insertion_pools, mode))
 
     def zip_block(cols, core_slots):
         if cols:
@@ -1096,7 +1110,7 @@ def sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None, wc=False,
     if arms["d_stem5"]:
         block(arms["linker_5"], ["8", "9"])
         block(arms["d_stem5"], [str(i) for i in range(10, 14)])
-        block(arms["d_loop"], [str(i) for i in range(14, 22)], d_loop_pools)
+        block(arms["d_loop"], [str(i) for i in range(14, 22)], d_loop_pools, mode="d_loop")
         block(arms["d_stem3"], [str(i) for i in range(22, 26)])
         block(arms["linker_dc"], ["26"])
     else:
@@ -1146,8 +1160,10 @@ def sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None, wc=False,
         # frequently do (bases parked in insert columns while the consensus
         # columns beside them are called deletions). read match/insert state
         # only where the counts disagree and the placement is in question.
-        exact_fit = core_slots is not None and \
-            _occupied_count(aligned_seq, cols) == len(core_slots)
+        n_bases = _occupied_count(aligned_seq, cols)
+        if mode == "d_loop" and core_slots and n_bases < len(core_slots):
+            core_slots = _shrink_slots(core_slots, n_bases, D_LOOP_DROP_ORDER)
+        exact_fit = core_slots is not None and n_bases == len(core_slots)
         if mode == "anticodon":
             anchor = _assign_anticodon_loop_block(labels, cols, ss_cons, aligned_seq,
                                                    raw_to_final, anticodon, suffix_counts,
