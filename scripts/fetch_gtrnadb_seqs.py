@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
-"""
-fetch_gtrnadb_seqs.py: pull real curated tRNA sequences from GtRNAdb, per
-domain, to complement sprinx's synthetic-consensus cyto test data.
+"""fetch_gtrnadb_seqs.py - pull curated tRNA sequences from GtRNAdb
 
-for each domain (euk/arch/bact), downloads one or more organisms' mature-tRNA
-FASTA files, collapses identical sequences within a domain, and writes
-data/cyto/{domain}_gtrnadb.fa. GtRNAdb's headers are left untouched -
-header_to_aa/header_to_anticodon in common.py already parse that format.
-Source URLs and collapsed duplicates go to data/cyto/README.md.
-
-usage: python scripts/fetch_gtrnadb_seqs.py [--out-dir data/cyto]
+input:   the per-domain mature-tRNA URLs in GTRNADB_SOURCES
+output:  data/cyto/{domain}_gtrnadb.fa, plus README.md and dedup_list.txt
+usage:   python scripts/fetch_gtrnadb_seqs.py [--out-dir data/cyto]
+env:     network access to gtrnadb.ucsc.edu
+notes:   GtRNAdb sequences complementing the synthetic-consensus cyto test
+         data. identical sequences within a domain collapse to one record.
+         GtRNAdb headers are kept as they are, since header_to_aa and
+         header_to_anticodon in common.py already parse that format
 """
 import argparse
 import os
@@ -82,7 +81,7 @@ def fetch_fasta(url):
 
 # aa codes with no matching CM in tRNAscan-SE's per-isotype databases:
 # 'Und' is GtRNAdb's undetermined-isotype call (anticodon 'NNN'); 'Sup'
-# (suppressor tRNAs, real anticodon reading a stop codon) has no isotype
+# (suppressor tRNAs, whose anticodon reads a stop codon) has no isotype
 # bucket either, since amino-acid assignment is an anticodon->codon-table
 # lookup and stop codons have no entry in that table.
 NO_CM_AAS = {"Und", "Sup"}
@@ -154,7 +153,10 @@ def domain_dedup_lines(domain, duplicates_of):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("--out-dir", default="data/cyto")
     args = parser.parse_args()
 

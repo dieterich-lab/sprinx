@@ -1,15 +1,17 @@
-"""
-test_sprinx_unit.py: unit tests for sprinx.common and sprinx.mito.
+"""test_sprinx_unit.py - unit tests for sprinx.common and sprinx.mito
 
-no subprocess calls; infernal not required. pre-computed cmalign Stockholm
-alignments are in data/test_data_bundle.txt (==> name <== markers, produced with
-`cmalign --notrunc --nonbanded -g`). ViennaRNA (RNA module) is always present
-when sprinx is importable (hard import), so RNA API tests are unconditional.
+input:   pre-computed cmalign alignments in data/test_data_bundle.txt
+output:  pytest results
+usage:   uv run --extra test pytest tests/test_sprinx_unit.py
+env:     none; no subprocess calls, and Infernal is not required
+notes:   bundle entries are marked "==> name <==" and were produced with
+         `cmalign --notrunc --nonbanded -g`. ViennaRNA is a hard import of
+         sprinx, which makes the RNA API tests unconditional
 
-coverage: header parsing, classify_arm_loss, finalize_structure, sprinzl_map
-(incl. bulge/junction labeling and the no-unlabeled invariant), arm-span check,
-threading patch, CM routing, ViennaRNA API. tests loop over cases internally
-rather than parametrizing, to keep the run count small.
+Coverage: header parsing, classify_arm_loss, finalize_structure, sprinzl_map
+including bulge and junction labeling and the no-unlabeled invariant, the
+arm-span check, the threading patch, CM routing, and the ViennaRNA API. Tests
+loop over cases internally rather than parametrizing, keeping the run count low.
 """
 import os
 import re
@@ -52,7 +54,7 @@ def _key(lbl):
     'e' labels (class-ii: Leu, Ser) between 45 and 46 in true 5'->3' order:
     e11-e17 (5' stem), then e1-e5 (loop), then e21-e27 (3' stem); the 3'
     stem is numbered in reverse as written (e27 comes before e21 reading
-    5'->3'), so its rank needs negating or e27 would sort after e21."""
+    5'->3'), and its rank needs negating or e27 would sort after e21."""
     m = re.match(r"e(\d)(\d)?([a-zA-Z]*)$", lbl)
     if m:
         d1, d2, suffix = m.group(1), m.group(2), m.group(3)
@@ -86,10 +88,10 @@ def _seq_with_anticodon(ss, stem_index, anticodon):
     return "".join(seq)
 
 
-# ViennaRNA library contracts (db_from_WUSS, mfe, ptable) are exercised by nearly
-# every test below, so they aren't asserted separately. drop_orphan_brackets is a
-# defensive net that finalize's both-sides-nulling keeps real data away from, so it
-# gets this one direct check on a synthetic orphan.
+# ViennaRNA library contracts (db_from_WUSS, mfe, ptable) run through nearly
+# every test below and are not asserted separately. drop_orphan_brackets is a
+# defensive net that finalize's both-sides-nulling keeps production input away
+# from. it gets this one direct check on a synthetic orphan.
 def test_drop_orphan_brackets_makes_ptable_safe():
     orphaned = "(((((((..((((......)))).(((((.......)))))....................)))))))"
     mangled = orphaned[:5] + ")" + orphaned[6:]   # one unmatched ')'
@@ -105,7 +107,7 @@ def test_header_field_extraction():
         ("mtdbD00063517|Glu|UUC|Homo_sapiens", "UUC", "Glu"),
         ("id|Phe|GAT|taxon", "GAU", "Phe"),                       # DNA -> RNA
         ("free text anticodon=GCU here", "GCU", None),            # tag fallback
-        # field 3 not a 3nt codon -> None, not silently used as anticodon
+        # field 3 not a 3nt codon -> None, never silently used as anticodon
         ("NC_008640.1:3203-3266|Romanomermis_culicivorax|Ile|GAU", None, "Romanomermis_culicivorax"),
         ("just a plain header", None, None),
         # GtRNAdb-style 'tRNA-{AA}-{anticodon}' name, no pipes at all
@@ -134,7 +136,7 @@ def test_canonical36_no_false_positives():
             d_flagged.append(name)
         if d["anticodon_search_method"] != "unique_loop_match":
             n_unanchored += 1
-    # Val's real T-arm threads into insert columns (n_pairs==0); the arm_span
+    # Val's intact T-arm threads into insert columns (n_pairs==0); the arm_span
     # cross-check keeps it canonical. Cys/Ser2 have n_pairs=1 at the D-arm slot
     # under the soft MIN_STEM_PAIRS threshold, likewise resolved by arm_span.
     assert len(t_flagged) <= 1, f"T-arm false positives: {t_flagged}"
@@ -173,8 +175,8 @@ def test_arm_loss_diagnosis_per_structural_class():
 
 def test_d_arm_absent_without_register_shift():
     """no-shift D-arm path (for CMs modeling an extra stem, e.g. TRNAinf-bact.cm).
-    no bundled fixture shows it naturally, so blank a real D-arm's own stem columns
-    while leaving the anticodon anchor untouched."""
+    no bundled fixture shows it naturally. blanking an intact D-arm's own stem
+    columns, with the anticodon anchor left untouched, produces it."""
     seqs, ss = load_mito_sto("aln_canonical36_qutrna_flags.sto")
     name = next(k for k in seqs if "Thr|UGU|Homo" in k)
     base = mito.classify_arm_loss(name, seqs[name], ss)
@@ -207,7 +209,7 @@ def test_stem_complementarity_and_anticodon_search():
 
 
 # -----------------------------------------------------------------------
-# sprinzl_map on real data: no unlabeled, monotonic, anticodon placed
+# sprinzl_map on bundled alignments: no unlabeled, monotonic, anticodon placed
 # -----------------------------------------------------------------------
 
 def test_sprinzl_map_real_data_invariants():
@@ -216,11 +218,11 @@ def test_sprinzl_map_real_data_invariants():
         ("aln_E_canonical_qutrna.sto",  "Glu|UUC|Homo",  "UUC", None),
         ("aln_T_canonical_qutrna.sto",  "Thr|UGU|Homo",  "UGU", None),
         ("aln_L1_canonical_qutrna.sto", "Leu1|UAG|Homo", "UAG", None),
-        # this Ser1 case has an 8-9nt anticodon loop (a stem-edge nucleotide
-        # the CM mis-threaded into the loop), not the canonical 7nt: exactly
-        # the case _assign_anticodon_loop exists for: the anticodon still
-        # lands at 34-35-36 because it's anchored on the anticodon's own
-        # position, not the loop's 5' edge.
+        # this Ser1 case has an 8-9nt anticodon loop rather than the canonical
+        # 7nt (a stem-edge nucleotide the CM mis-threaded into the loop):
+        # exactly the case _assign_anticodon_loop exists for. the anticodon
+        # still lands at 34-35-36, anchored on its own position rather than
+        # the loop's 5' edge.
         ("aln_S1_qutrna.sto",           "Ser1|GCU|Homo", "GCU", "d"),
         ("aln_both_armless_mature.sto", "culicivorax",   "GAU", "d_and_t"),
     ]
@@ -242,10 +244,10 @@ def test_sprinzl_map_real_data_invariants():
 
 
 def test_c_stem3_labels_not_overwritten_by_var_loop():
-    """the c-stem-3 columns must keep their own labels (40-43), not get
-    overwritten by var_loop's numbering. var_loop's start boundary must be
-    the outermost (last) c-stem-3 column, not the innermost one adjacent to
-    the loop, or its own assign_slots call bleeds into c-stem-3's columns.
+    """the c-stem-3 columns must keep their own labels (40-43) rather than
+    being overwritten by var_loop's numbering. var_loop's start boundary must
+    be the outermost (last) c-stem-3 column; the innermost one adjacent to the
+    loop would let its own assign_slots call bleed into c-stem-3's columns.
     checked against known-correct values directly, since monotonicity alone
     can't catch a shifted-but-still-increasing run."""
     seqs, ss_cons = load_mito_sto("aln_E_canonical_qutrna.sto")
@@ -258,11 +260,11 @@ def test_c_stem3_labels_not_overwritten_by_var_loop():
 
 
 def test_variable_arm_stem_gets_e_series_labels():
-    """real class-ii case (S. cerevisiae mt-Tyr): a real nested variable-
-    arm stem-loop between the c-arm and t-arm gets the Sprinzl e-series
-    reserved for it (e11-e17 stem/e1-e5 loop/e21-e27 stem, paired e1N<->e2N),
-    and every e-labelled base is complementary to its declared pairing
-    partner, not just present."""
+    """class-ii case (S. cerevisiae mt-Tyr): a nested variable-arm stem-loop
+    between the c-arm and t-arm gets the Sprinzl e-series reserved for it
+    (e11-e17 stem/e1-e5 loop/e21-e27 stem, paired e1N<->e2N), and every
+    e-labelled base is complementary to its declared pairing partner rather
+    than merely present."""
     seqs, ss_cons = load_mito_sto("aln_canonical36_qutrna_flags.sto")
     name = next(k for k in seqs if "Tyr|GUA|Saccharomyces" in k)
     seq, ss = common.finalize_structure({"aligned_seq": seqs[name], "ss_cons": ss_cons})
@@ -280,7 +282,7 @@ def test_variable_arm_stem_gets_e_series_labels():
 def test_assign_anticodon_loop_anchors_on_anticodon_not_loop_edge():
     """direct unit coverage for _assign_anticodon_loop: a loop longer than the
     canonical 7nt (e.g. extra nt on the 5' side) still centres 34-35-36 on
-    the real anticodon, with the overflow letter-suffixed onto 33/38 and the
+    the anticodon itself, with the overflow letter-suffixed onto 33/38 and the
     anticodon's own labels staying fixed."""
     seq = "AAUUGCAUUAA"   # 11nt: 4 before the anticodon, GCA, 4 after
     c_loop = list(range(len(seq)))
@@ -294,11 +296,11 @@ def test_assign_anticodon_loop_anchors_on_anticodon_not_loop_edge():
 
 
 def test_long_unpaired_variable_region_uses_e_loop_not_48_overflow():
-    """a variable region long enough to signal a real class-ii extension,
-    even when no stem was threaded there (so no v_stem is found, e.g. when
-    a CM leaves it as one long unpaired run), gets 44/45, e1-e5 (with
-    letter-suffix overflow on e5 past 5nt), 46/47/48: the same e-series
-    layout as the stem-bearing case, keyed only on length."""
+    """a variable region long enough to signal a class-ii extension, even when
+    no stem was threaded there (so no v_stem is found, e.g. when a CM leaves
+    it as one long unpaired run), gets 44/45, e1-e5 (with letter-suffix
+    overflow on e5 past 5nt), 46/47/48: the same e-series layout as the
+    stem-bearing case, keyed only on length."""
     ss = ("(((((((" + "(((CCC)))" + "(((GGG)))" + "." * 11 + "(((AAA)))" + ")))))))")
     seq = ("A" * 7 + "AAA" + "CCC" + "AAA" + "AAA" + "GGG" + "AAA"
            + "U" * 11 + "AAA" + "AAA" + "AAA" + "A" * 7)
@@ -311,7 +313,7 @@ def test_long_unpaired_variable_region_uses_e_loop_not_48_overflow():
 
 
 # -----------------------------------------------------------------------
-# _forgi_stem_groups: bulge merging vs real arm junctions
+# _forgi_stem_groups: bulge merging vs junctions between arms
 # -----------------------------------------------------------------------
 
 def test_forgi_stem_groups():
@@ -347,10 +349,11 @@ def test_structural_bulge_labeling():
 
     # (ss, expected {col: region})
     region_checks = [
-        # acceptor 5' bulge (3,4) and 3' bulge (67,68) stay acceptor insertions,
-        # not absorbed into linker_5 (D-connector) or var_loop.
+        # acceptor 5' bulge (3,4) and 3' bulge (67,68) stay acceptor insertions
+        # rather than being absorbed into linker_5 (D-connector) or var_loop.
         (acceptor, {3: "acceptor_5", 4: "acceptor_5", 67: "acceptor_3", 68: "acceptor_3"}),
-        # D-stem 3' bulge (18,19) stays a D-stem insertion, not the connector 26.
+        # D-stem 3' bulge (18,19) stays a D-stem insertion rather than the
+        # connector 26.
         (d_bulge, {18: "D_stem_3", 19: "D_stem_3"}),
     ]
     for ss, checks in region_checks:
@@ -372,7 +375,8 @@ def test_structural_bulge_labeling():
 
 
 def test_fill_stem_bulges_overflow_and_ownership():
-    # 27 consecutive owned gaps: 27th falls back to a 2-char code, not '['.
+    # 27 consecutive gaps inside one strand: the 27th falls back to a 2-char
+    # code rather than '['.
     ss = "(" + "." * 27 + ")"
     labels = {0: "5"}
     common._fill_stem_bulges(labels, ss, strands=[[0, len(ss) - 1]])
@@ -414,7 +418,7 @@ def test_finalize_structure_clean_balanced_equal_length():
 
 class TestArmSpanAndPatch:
     """multi-seq bundle proxies the gapped aligned_seq; integration tests exercise
-    the same logic on real single-seq cmalign output."""
+    the same logic on live single-seq cmalign output."""
 
     CANONICAL_SS = "(((((((..((((......)))).(((((.......)))))....................)))))))"
 
@@ -432,7 +436,7 @@ class TestArmSpanAndPatch:
         seqs, ss, elems = self._val()
         t_elem = elems[-1]
         val = next(k for k in seqs if "Val|UAC|Homo" in k)
-        # Val's real T-arm passes the span check and folds as a hairpin.
+        # Val's intact T-arm passes the span check and folds as a hairpin.
         assert mito.arm_span_has_enough_sequence(seqs[val], t_elem)
         assert all(mito.arm_span_has_enough_sequence(a, t_elem) for a in seqs.values())
         fseq, _ = common.finalize_structure({"aligned_seq": seqs[val], "ss_cons": ss})

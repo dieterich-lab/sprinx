@@ -1,27 +1,17 @@
-"""
-sprinx.cyto: combined-CM-database selection for cytosolic/nuclear tRNAs
-(--scheme euk/arch/bact).
+"""cyto.py - CM selection for cytosolic and nuclear tRNAs (euk/arch/bact)
 
-picks the matching per-isotype CM from a domain's combined database, then
-hands the winning alignment straight to sprinx.common.sprinzl_map_from_alignment.
+input:   a (header, seq) record and a combined per-isotype CM database
+output:  the alignment, passed to common.sprinzl_map_from_alignment
+usage:   from sprinx.cyto import process_cyto_record
+env:     cmfetch and cmalign on PATH
+notes:   databases are tRNAscan-SE TRNAinf-{euk,arch,bact}-iso, checked into
+         data/cyto/isotype_cm/. one CM per amino acid field: euk-Ala,
+         euk-Leu, euk-SeC, euk-iMet. Leu and Ser isoacceptors share one CM
+         per domain; Ile2 and iMet/fMet each get their own
 
-CM source: tRNAscan-SE's per-isotype combined covariance-model databases
-(TRNAinf-{euk,arch,bact}-iso from
-https://github.com/UCSC-LoweLab/tRNAscan-SE/tree/master/lib/models, checked
-into data/cyto/isotype_cm/).
-
-- one CM per amino acid field (e.g. euk-Ala, euk-Leu, euk-SeC, euk-iMet).
-- Leu/Ser isoacceptors share a single CM per domain.
-- Ile2 (AUA-decoding) and iMet/fMet (initiator) get their own model each:
-  same amino acid, structurally distinct tRNA.
-
-each database is one cmpress'd file holding every isotype's CM. cmalign
-aligns to exactly one CM per call, so a candidate model is extracted into a
-temp file via cmfetch first (see _cmfetch_one).
-
-selection has no scoring step. the header's aa field picks exactly one CM
-per domain (one model per amino acid). the anticodon anchor check still
-runs, to warn on a mismatch; there's no fallback model to try instead.
+Selection has no scoring step. The header's aa field picks exactly one model.
+The anticodon anchor check still warns on a mismatch, with no fallback model
+to try instead.
 """
 
 import os
@@ -50,6 +40,7 @@ ISOTYPE_MODEL_RE = re.compile(r"^[a-z]+-([A-Za-z]+\d*)$")
 def default_cm_db_path(domain):
     """bundled default --cyto-cm-db for a domain (euk/arch/bact): tRNAscan-SE's
     combined per-isotype CM database, one CM per amino acid."""
+    # from lib/models of github.com/UCSC-LoweLab/tRNAscan-SE
     return package_data_path("cyto_cm", f"TRNAinf-{domain}-iso")
 
 
@@ -97,8 +88,9 @@ def select_cyto_cm_and_align(header, seq, cm_db_path, isotype_index):
     """Top-level CM selection for one cytosolic/nuclear tRNA sequence.
 
     1. Resolve the header's aa field to a model name via isotype_index.
-       Exact match only: Ile/Ile2 and Met/iMet/fMet are distinct tRNAs
-       sharing an amino acid identity, so no isoacceptor-digit stripping.
+       Exact match only. Ile/Ile2 and Met/iMet/fMet are distinct tRNAs
+       sharing an amino acid identity, and no isoacceptor digit is stripped:
+       Ile2 decodes AUA, iMet and fMet initiate.
     2. Align against that one model. A domain's combined database has
        exactly one CM per aa field: nothing left to choose between.
     3. aa field not in the index, or cmfetch/cmalign fails: log a warning,

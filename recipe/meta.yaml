@@ -43,12 +43,11 @@ about:
   summary: "Sprinzl-coordinate annotation for mitochondrial tRNAs"
   description: |
     Assigns Sprinzl coordinates to mitochondrial tRNA sequences by aligning
-    each to a tiered set of covariance models, diagnosing genuine arm loss
-    (D-arm, T-arm, doubly-armless) versus a CM threading failure via
-    structural evidence, and rerouting genuinely armless sequences to a
-    matching armless CM. A component of the qutrna2 pipeline, published
-    standalone for transparency and reuse; not a general-purpose tRNA
-    annotator.
+    each to a tiered set of covariance models, telling arm loss (D-arm,
+    T-arm, doubly-armless) apart from a CM threading failure via structural
+    evidence, and rerouting true armless sequences to a matching armless
+    CM. A component of the qutrna2 pipeline, published standalone for
+    transparency and reuse; not a general-purpose tRNA annotator.
   license: GPL-3.0-or-later
   license_file: LICENSE
 

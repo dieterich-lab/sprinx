@@ -1,40 +1,18 @@
 #!/usr/bin/env python3
-"""
-visualize_ss.py: R2DT-rendered 2D diagrams for a sprinx TSV.
+"""visualize_ss.py - R2DT-rendered 2D diagrams for a sprinx TSV
 
-standalone script, not part of the installable sprinx package: R2DT is a
-container, which is unnecessary for anything just consuming sprinx's TSV
-output (e.g. QutRNA2). needs sprinx itself installed (for sprinx.common's
-header parsing and subprocess helpers) plus its own extra dependency,
-cairosvg (`pip install cairosvg`), and R2DT.
+input:   a sprinzl_mapping.tsv from `sprinx --out ...`
+output:  a grid plot at --out, plus _CMonly and _RNAfoldOnly plots for any
+         RNAfold-patched record
+usage:   python visualize_ss.py --tsv sprinzl_mapping.tsv --out plot.png
+env:     sprinx, cairosvg, and R2DT as r2dt.py on PATH or a container image
+notes:   standalone, outside the installable package, since R2DT is a heavy
+         container that anything merely consuming the TSV has no use for
 
-R2DT is not bundled. resolve_r2dt_runtime finds it as r2dt.py on PATH, or as a
-container image run under apptainer, singularity, or docker. How to obtain it,
-and the image name, mount point, and subcommand this script passes, are all
-upstream's to define: see https://docs.r2dt.bio.
-
-reads a sprinzl_mapping.tsv produced by `sprinx --out ...` (see sprinx.cli):
-seq_id, seq_index, nucleotide, sprinzl_position, region, cm_used, rerouted,
-arm_loss_call, structure, cm_only_structure, rnafold_only_structure. groups
-rows back into per-record seq/ss/sprinzl, so no cmalign re-run is needed.
-
-renders each record's final structure (the structure column) via R2DT's
-template-free "stockholm" mode. this is sprinx's structural call, which
-could disagree with whatever structure R2DT would derive on its own from its
-template library. R2DT only accepts a real multi-sequence alignment as
-input, but these records aren't aligned to each other at all, so
-build_r2dt_stockholm fakes one: every record's sequence is concatenated
-end-to-end into a single row, with one #=GC structureID region marking each
-record's column span. see https://docs.r2dt.bio for the annotation
-format.
-
-for records where sprinx patched a CM threading failure via RNAfold (the
-cm_only_structure / rnafold_only_structure columns are populated), also
-renders the pre-patch CM-only structure and the naive whole-sequence RNAfold
-fold alongside the primary plot, so the patch's effect is visible rather
-than assumed.
-
-usage: see README.md, or `python visualize_ss.py --help`.
+Rows group back into per-record structures. No cmalign re-run is needed.
+Panels show sprinx's own structural call through R2DT's template-free
+stockholm mode. README.md's "Rendering 2D diagrams" covers the output files
+and how this can disagree with R2DT's own template library.
 """
 
 import argparse
@@ -115,11 +93,11 @@ def resolve_r2dt_runtime(runtime="auto", image=None):
 def r2dt_command(runtime, image, tmpdir, args):
     """full argv to run `r2dt.py <args>` under the chosen runtime. Container
     runtimes see tmpdir mounted at R2DT_CONTAINER_TEMP, so args must already
-    use container-side paths; native mode substitutes the real tmpdir back in."""
+    use container-side paths; native mode substitutes the host tmpdir back in."""
     if runtime == "native":
         return ["r2dt.py"] + [a.replace(R2DT_CONTAINER_TEMP, tmpdir) for a in args]
     if runtime == "docker":
-        # --user keeps the output owned by the caller, so the temp dir stays
+        # --user writes the output as the caller, which keeps the temp dir
         # removable; -w moves the working directory onto the bind mount, since
         # r2dt.py also writes paths relative to it.
         user = ["--user", f"{os.getuid()}:{os.getgid()}"] if hasattr(os, "getuid") else []
@@ -132,7 +110,7 @@ def r2dt_command(runtime, image, tmpdir, args):
 def _r2dt_id_line(segments):
     """build one #=GC structureID/regionID line: '|' marks each segment's first
     column, the segment's name fills the following columns, '.' pads the rest,
-    the format R2DT's stockholm parser expects (see module docstring above)."""
+    the format R2DT's stockholm parser expects (see https://docs.r2dt.bio)."""
     total = sum(length for _, length in segments)
     line = ["."] * total
     pos = 0
@@ -150,6 +128,11 @@ def build_r2dt_stockholm(plotted):
     names) with one structureID region per record, in the same order as
     `plotted`. regionID is the aa field, so R2DT's --color-by region groups
     isoacceptors under one colour.
+
+    R2DT accepts only a proper multi-sequence alignment as input, and these
+    records are not aligned to each other at all. The sequences are
+    concatenated end to end into one row instead, with a #=GC structureID
+    region marking each record's column span.
 
     names are a plain per-record index ('s0000', 's0001', ...), not derived
     from the header: a header-derived name must fit within that record's own
@@ -198,16 +181,16 @@ def _flip_panel_north(panel, width, height):
 
     - why: R2R (the template-free layout engine R2DT uses here) always draws
       the acceptor stem at the bottom, with no orientation flag to change
-      that (confirmed consistent across every sequence/shape checked, so one
-      unconditional flip suffices).
-    - why y-only, not a full 180-degree rotation: rotating would negate x
-      too and swing every side arm from east to west. mirroring y alone
-      moves the acceptor stem to the top while leaving east/west as R2R
-      drew them.
+      that (confirmed consistent across every sequence and shape checked,
+      and one unconditional flip suffices).
+    - why y-only rather than a full 180-degree rotation: rotating would
+      negate x too and swing every side arm from east to west. mirroring y
+      alone moves the acceptor stem to the top while leaving east/west as
+      R2R drew them.
     - every <text> glyph gets its own counter-mirror about its own y: two
-      y-mirrors about different lines compose into a pure translation, so
-      the glyph stays upright while still landing at its mirrored position -
-      only the backbone/pairing geometry actually flips."""
+      y-mirrors about different lines compose into a pure translation,
+      leaving the glyph upright while it still lands at its mirrored
+      position. only the backbone/pairing geometry actually flips."""
     wrapper = ET.Element(f"{{{SVG_NS}}}g", {"transform": f"matrix(1 0 0 -1 0 {height})"})
     for child in list(panel):
         panel.remove(child)
@@ -239,7 +222,8 @@ def _inject_sprinzl_labels(panel, sprinzl, region):
 
     nucleotides are top-level <g><title>i (...)</title><text>BASE</text></g>
     in strict 5'->3' order (R2DT's own emission order); a running count of
-    real base letters lines up with sprinzl's 0-indexed final_seq positions."""
+    nucleotide letters lines up with sprinzl's 0-indexed final_seq
+    positions."""
     for g in list(panel):
         text = g.find(f"{{{SVG_NS}}}text")
         line = g.find(f"{{{SVG_NS}}}line")
@@ -281,8 +265,8 @@ def _wrap_caption(text, cell_w, max_lines=4):
     """text (header and summary, '\\n'-separated) -> wrapped lines that fit
     cell_w, each original line wrapped independently so the header and
     summary never run together into one blob. width is estimated from
-    monospace glyph width since this is drawn as SVG <text>, not measured
-    by a real layout engine."""
+    monospace glyph width since this is drawn as SVG <text>, never measured
+    by an actual layout engine."""
     chars_per_line = max(int(cell_w / (CAPTION_FONT_SIZE * 0.62)), 10)
     lines = [line for para in text.split("\n")
              for line in (textwrap.wrap(para, width=chars_per_line) or [""])]
@@ -396,9 +380,9 @@ def make_plot(records, out_path, runtime="auto", r2dt_image=None, ncols=6):
 _SVG_CONVERTERS = {".png": cairosvg.svg2png, ".pdf": cairosvg.svg2pdf}
 
 
-# cairo's hard surface-size limit is ~32767px/side; a wide stitched plot (many
-# sequences) can exceed that at scale=2.0, so the PNG scale is capped to keep
-# the longer side under this, well clear of the real limit.
+# cairo's hard surface-size limit is ~32767px/side, and a wide stitched plot
+# (many sequences) can exceed that at scale=2.0. the PNG scale is capped to
+# keep the longer side under this, well clear of the hard limit.
 MAX_PNG_DIM = 16000
 
 
@@ -489,7 +473,7 @@ def main():
     logger.info(f"plot: {args.out}")
 
     # sequences RNAfold-patched for a CM threading failure: also plot the
-    # CM-only structure (pre-patch) side by side, so the patch's effect is
+    # CM-only structure (pre-patch) side by side. the patch's effect is then
     # visible rather than assumed.
     cm_only_records = [{**r, "ss": r["cm_only_ss"]} for r in records if r.get("cm_only_ss")]
     if cm_only_records:
@@ -500,7 +484,7 @@ def main():
 
     # same sequences, but folded naively as a whole with RNAfold alone (no
     # CM at all): shows why the hybrid exists, since full-sequence MFE misses
-    # tertiary contacts and modified bases a real mt-tRNA structure needs.
+    # tertiary contacts and modified bases an mt-tRNA structure depends on.
     rnafold_only_records = [{**r, "ss": r["rnafold_only_ss"]} for r in records if r.get("rnafold_only_ss")]
     if rnafold_only_records:
         rnafold_only_path = _rnafold_only_plot_path(args.out)

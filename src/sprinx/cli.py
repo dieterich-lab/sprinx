@@ -1,19 +1,18 @@
-"""
-sprinx.cli: command-line entry point for sprinx.
+"""cli.py - command-line entry point for sprinx
 
-argument parsing and per-record orchestration only; all labeling logic lives
-in sprinx.common (shared) and sprinx.mito / sprinx.cyto (per-scheme). optional
-R2DT-rendered visualization of the output TSV is a separate standalone script,
-scripts/visualize_ss.py, not part of this package (see its docstring for why:
-R2DT needs a Singularity image, which is heavy and unnecessary for anything
-just consuming sprinx's TSV output).
+input:   a tRNA FASTA and a --scheme, plus optional CM overrides
+output:  one TSV row per position, written to --out
+usage:   sprinx --help    (see also README.md)
+env:     cmalign, cmfetch and RNAfold on PATH
+notes:   argument parsing and per-record orchestration only. common.py does
+         the labeling, mito.py and cyto.py the per-scheme CM selection.
+         scripts/visualize_ss.py renders the TSV and is outside the package,
+         since R2DT needs a heavy Singularity image
 
---scheme selects which pipeline runs: mito uses tiered canonical-CM selection
-with arm-loss diagnosis and armless-CM rerouting (sprinx.mito); euk/arch/bact
-use combined-CM-database selection with no arm-loss step (sprinx.cyto), since
-cytosolic/nuclear tRNAs don't lose arms the way mt-tRNAs do.
-
-usage: see README.md, or `sprinx --help`.
+--scheme picks the pipeline. mito uses tiered canonical-CM selection with
+arm-loss diagnosis and armless-CM rerouting. euk/arch/bact use combined-CM
+selection with no arm-loss step, since cytosolic and nuclear tRNAs do not
+lose arms the way mt-tRNAs do.
 """
 
 import argparse
@@ -39,8 +38,8 @@ def _load_records(fasta_path):
 
 def _run_pool(worker, tasks, processes):
     """dispatch tasks to worker, either via a process pool or in-process.
-    single-process path exists so --debug logging interleaves in real time
-    without multiprocess log-buffering surprises."""
+    single-process path exists so --debug logging interleaves live without
+    multiprocess log-buffering surprises."""
     if processes > 1:
         with multiprocessing.Pool(processes) as pool:
             return pool.map(worker, tasks)

@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""
-generate_synthetic_cyto_seqs.py: rebuild data/cyto/{euk,arch,bact}.fa from
-the bundled isotype CM databases: cmfetch one CM per amino acid, cmemit -c
-for its consensus sequence, then derive an anticodon by aligning the
-consensus back to its own CM and taking the middle 3nt of the middle
-stem-loop (the anticodon loop in a canonical cloverleaf).
+"""generate_synthetic_cyto_seqs.py - rebuild the cyto test FASTAs from the CMs
 
-usage: python scripts/generate_synthetic_cyto_seqs.py
+input:   the bundled isotype CM databases under src/sprinx/data/cyto_cm/
+output:  data/cyto/{euk,arch,bact}.fa, one record per amino acid
+usage:   python scripts/generate_synthetic_cyto_seqs.py
+env:     cmfetch, cmemit and cmalign on PATH
+notes:   cmfetch one CM per amino acid, cmemit -c for its consensus, then
+         derive the anticodon by aligning the consensus back to its own CM
+         and taking the middle 3nt of the middle stem-loop, which is the
+         anticodon loop in a canonical cloverleaf
 """
 import os
 import tempfile

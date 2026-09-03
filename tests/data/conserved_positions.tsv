@@ -1,8 +1,9 @@
 # Bases that are near-invariant at their Sprinzl position (Biela et al. 2023).
 # If a label drifts off its column, the base under it changes and the fraction
-# drops, so each position gets a floor.
+# drops. Each position therefore carries a min_fraction.
 #
-# Floors sit under the value measured on data/cyto/euk_gtrnadb.fa, 531 seqs.
+# Every min_fraction is set below the value measured on
+# data/cyto/euk_gtrnadb.fa, 531 seqs.
 # Failing means labels moved across seq positions.
 #
 # 74-76 are absent as conserved tests

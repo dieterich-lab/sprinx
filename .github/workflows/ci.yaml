@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # the conserved-position test compares against alignments from this
-      # version of cmalign, so it is pinned rather than taken from apt
+      # version of cmalign. pinned here rather than taken from apt
       - uses: mamba-org/setup-micromamba@v2
         with:
           environment-name: infernal

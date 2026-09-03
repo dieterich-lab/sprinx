@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""
-convert_output_to_qutrna2-seq_to_sprinzl.py: convert sprinx's sprinzl_mapping.tsv
-into QuTRNA2's seq_to_sprinzl.tsv format: one row per (Sprinzl label, tRNA id), giving
-that tRNA's 1-indexed sequence position for the label, or '-' if the label doesn't
-occur in that particular tRNA.
+"""convert_output_to_qutrna2-seq_to_sprinzl.py - sprinx TSV to QuTRNA2 format
 
-the reference label set is the union of every distinct sprinzl_position seen across
-the whole input, in Sprinzl order, since sprinx assigns labels per-sequence (armless
-replacement loops, RNAfold-patch overflow, insertion codes), so no fixed master list
-exists ahead of time; it has to be built from whatever the input actually contains.
+input:   sprinx's sprinzl_mapping.tsv
+output:  sprinzl_mapping.seq_to_sprinzl.tsv, or --out
+usage:   python convert_output_to_qutrna2-seq_to_sprinzl.py sprinzl_mapping.tsv
+env:     none
+notes:   one row per (Sprinzl label, tRNA id), giving that tRNA's 1-indexed
+         sequence position for the label, or '-' where the label is absent
 
-usage: python convert_output_to_qutrna2-seq_to_sprinzl.py sprinzl_mapping.tsv
-output: sprinzl_mapping.seq_to_sprinzl.tsv (or --out)
+The reference label set is the union of every distinct sprinzl_position across
+the whole input, in Sprinzl order. sprinx assigns labels per sequence (armless
+replacement loops, RNAfold-patch overflow, insertion codes), leaving no fixed
+master list to work from ahead of time.
 """
 import argparse
 import csv
@@ -26,9 +26,9 @@ def _label_sort_key(label):
     sort by (number, suffix length, suffix): suffix length before suffix
     itself so a single-letter overflow (Z) sorts before the two-letter
     overflow that follows it (AA), which plain string comparison gets wrong.
-    variable-arm 'e' labels (class-ii: Leu, Ser) sit strictly between 45 and
-    46: e11-e17 (5' stem) first, then e1-e5 (loop), then e21-e27 (3' stem),
-    but the 3' stem is numbered in REVERSE as you read it 5'->3' (e27
+    variable-arm 'e' labels (class-ii: Leu, Ser) belong strictly between 45
+    and 46: e11-e17 (5' stem) first, then e1-e5 (loop), then e21-e27 (3'
+    stem). the 3' stem is numbered in REVERSE as you read it 5'->3' (e27
     comes before e21), so its sort order needs the digit negated or e27
     would wrongly sort after e21."""
     m = re.match(r"e(\d)(\d)?([A-Za-z]*)$", label)

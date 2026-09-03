@@ -1,30 +1,14 @@
-"""
-sprinx.common: structural parsing and Sprinzl-label assignment shared by
-sprinx.mito and sprinx.cyto.
+"""common.py - structural parsing and Sprinzl-label assignment
 
-This generic module (not mito or cyto-specific)
-turns a cmalign alignment into stem/loop topology (via forgi) and maps that
-topology onto Sprinzl coordinates, which both the mito and cyto paths
-need identically.
-
-cmalign flags (required together, every call):
-  --notrunc   : include all positions; without it, local mode silently drops
-                regions that fit poorly, causing false arm-loss calls.
-  --nonbanded : exact CYK/Inside DP; HMM banding is ~10x faster but
-                introduces alignment errors on divergent tRNA structures.
-  -g          : glocal; prevents local begin/end states skipping arm regions.
-
-header format (pipe-delimited):
-  field 1: seq id | field 2: three-letter aa (e.g. Ala, Leu1)
-  field 3: anticodon (3nt, RNA or DNA) | field 4: taxon
-  fallback 1: 'anticodon=XXX' tag anywhere in the header.
-  fallback 2: GtRNAdb-style 'tRNA-{AA}-{anticodon}' name anywhere in the
-  header (e.g. mt-tRNA-Ala-TGC-1-1); aa has no isoacceptor digit in this
-  convention (Leu/Ser cover both isoacceptors), so aa_field_to_cm_code
-  returns the bare code and CM selection disambiguates by anticodon anchor
-  (_pick_by_anticodon_anchor).
-  field 3 (or the fallback anticodon) is the primary key for CM selection;
-  field 2 (or the fallback aa) only identifies aa.
+input:   a cmalign alignment (aligned_seq + ss_cons) and the header anticodon
+output:  {sequence index: Sprinzl label}, plus the topology it was read from
+usage:   from sprinx.common import cmalign_one, sprinzl_map_from_alignment
+env:     cmalign and cmstat on PATH
+notes:   forgi turns the consensus structure into stem/loop topology and the
+         Sprinzl assignment runs on that. mito.py and cyto.py both call in
+         here and neither keeps a copy. header parsing takes three forms,
+         listed under README's Header format section and implemented in
+         header_to_anticodon
 """
 
 import importlib.resources
@@ -136,7 +120,7 @@ def aa_field_to_cm_code(aa_field, cm_index_keys):
     suffix, check against cm_index_keys. a bare aa field with no isoacceptor
     digit (e.g. 'Leu' from a GtRNAdb-style header, which never numbers
     isoacceptors) is returned as-is if it matches the digit-stripped form of
-    one or more index entries, so the caller can disambiguate by anticodon
+    one or more index entries. the caller then disambiguates by anticodon
     instead of failing here. returns None if the code matches nothing in the
     index at all."""
     if not aa_field:
@@ -255,15 +239,20 @@ def parse_multi_sto(path_or_text, from_text=False):
 
 
 def cmalign_one(header, seq, cm_path):
-    """align one sequence to one CM with cmalign --notrunc --nonbanded -g
-    (see module docstring for flag rationale). returns dict with aligned_seq,
-    ss_cons, raw_sto, cm_path; or None on failure. gapped alignment is retained
-    because arm-loss diagnosis and CM-selection scoring need alignment-column
-    coordinates."""
+    """align one sequence to one CM with cmalign --notrunc --nonbanded -g.
+    returns dict with aligned_seq, ss_cons, raw_sto, cm_path; or None on
+    failure. the gapped alignment is kept: arm-loss diagnosis and CM-selection
+    scoring both need alignment-column coordinates."""
     with tempfile.NamedTemporaryFile("w", suffix=".fa", delete=False) as fh:
         fh.write(f">{header}\n{seq}\n")
         fa_path = fh.name
     try:
+        # the three flags go together on every call. --notrunc keeps all
+        # positions; local mode otherwise drops regions that fit poorly and
+        # those come back as false arm-loss calls. --nonbanded is exact
+        # CYK/Inside DP; HMM banding is ~10x faster and misaligns divergent
+        # tRNA structures. -g is glocal, which stops local begin/end states
+        # from skipping whole arm regions.
         stdout, stderr, rc = run(["cmalign", "--notrunc", "--nonbanded", "-g", cm_path, fa_path])
         if rc != 0:
             logger.warning(f"cmalign failed (rc={rc}) for {header} against {cm_path}:\n{stderr.strip()}")
@@ -324,15 +313,16 @@ def _forgi_stem_groups(ss):
 
     How merge-vs-keep-separate is decided:
     - an interior-loop ('i') edge connects two stems whether it's a bulge
-      inside one real helix, or a junction between two separate arms.
-    - forgi's graph shape looks the same either way, so we count "anchors"
-      instead: each hairpin is one anchor, plus the acceptor stem counts as
-      one more anchor if the group also holds a hairpin.
-    - more than one anchor: a real junction. keep the stems separate.
+      inside one helix or a junction between two separate arms.
+    - forgi's graph shape looks the same either way. Counting "anchors" tells
+      the two apart: each hairpin is one anchor, plus the acceptor stem
+      counts as one more anchor if the group also holds a hairpin.
+    - more than one anchor: a junction between arms. keep the stems separate.
     - one or zero anchors: a bulge inside a single helix. merge.
     - the junction case only happens in armless/doubly-armless alignments,
       where two arms end up directly adjacent. a full cloverleaf's arms
-      always join through a multiloop ('m'), never 'i', so they never merge.
+      always join through a multiloop ('m') and never 'i', which keeps them
+      from ever merging.
     - see TestForgiStemGroups for the four cases this covers.
 
     Returns: list of dicts, sorted by span start, each with:
@@ -383,7 +373,7 @@ def _forgi_stem_groups(ss):
         hairpins = {h for g in group for h in hairpin_neighbors(g)}
         anchors = len(hairpins) + (1 if hairpins and acceptor_elem in group else 0)
         if anchors > 1:
-            for g in group:  # real junction (acceptor<->arm or arm<->arm), not a bulge
+            for g in group:  # junction between arms, or acceptor to arm: keep apart
                 used.add(g)
                 groups.append(make_group({g}))
         else:
@@ -433,8 +423,8 @@ def find_anticodon_stem_index(aligned_seq, stem_loop_elements, anticodon, expect
 
 def stem_complementarity(aligned_seq, ss, elem):
     """WC/wobble pairing check for one stem element. n_pairs: columns where both
-    partners are simultaneously non-gap (0 pairs = structurally impossible for
-    a stem to exist there, not a threshold call). n_compatible: of those, WC or
+    partners are simultaneously non-gap. 0 pairs settles the question on
+    geometry alone - no stem can exist there. n_compatible: of those, WC or
     G-U wobble pairs; callers read per_stem_complementarity directly rather
     than a binary verdict. raw WUSS in ss is handled transparently by
     db_from_WUSS."""
@@ -525,8 +515,8 @@ def locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm=None):
     - inner_stems: a list of _forgi_stem_groups dicts (stem5_cols,
       stem3_cols, loop_cols already known from forgi).
     - 'does not enclose' check: a D-armless pseudostem opens before C and
-      closes after C. It must be excluded as a D-arm candidate, since it IS
-      the enclosing pseudostem, not a D-arm at all. See
+      closes after C. That pseudostem is the enclosing structure itself and
+      has to be excluded as a D-arm candidate. See
       TestSprinzlAssignment::test_d_armless_replacement_loop_gets_d_arm_labels.
 
     How the C-stem is found: by position (EXPECTED_ANTICODON_ARM_INDEX). The
@@ -537,7 +527,7 @@ def locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm=None):
       means the alignment itself is broken, and raises rather than
       mislabeling silently.
     - Exactly 2 stems remaining is the one shape position alone can't
-      resolve (C sits first if D is the missing arm, second if T is). That
+      resolve (C comes first if D is the missing arm, second if T is). That
       case needs missing_arm, established via arm-loss diagnosis on the
       canonical alignment (mito.classify_arm_loss) when this sequence came
       from the mito path; always None on the cytosolic path, where 2-stem
@@ -589,12 +579,11 @@ def locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm=None):
 
     d_stem, t_stem, v_stem = None, None, None
     # outermost (last) column of the c-stem 3' strand; stem3_cols[0] is the
-    # INNERMOST column (adjacent to the loop); using it here was a real bug:
-    # var_loop's boundary must start after the whole c-stem ends, not after
-    # its first (innermost) column, or var_loop's own assign_slots call
-    # silently overwrites the c-stem-3 columns between [0] and [-1] with wrong
-    # (var-loop) labels; confirmed on real data (e.g. mt-Glu): columns that
-    # should be Sprinzl 40-43 (c_stem3) were coming out as 44-47 (var_loop).
+    # INNERMOST column (adjacent to the loop). var_loop's boundary must start
+    # after the whole c-stem ends. Starting it after the innermost column
+    # instead lets var_loop's own assign_slots call overwrite the c-stem-3
+    # columns between [0] and [-1] with var-loop labels: on mt-Glu, columns
+    # that should be Sprinzl 40-43 (c_stem3) came out as 44-47 (var_loop).
     c_close = c_stem["stem3_cols"][-1] if c_stem else None
     if c_stem:
         before = [g for g in inner_stems
@@ -607,12 +596,12 @@ def locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm=None):
         # min(after) breaks for class-ii tRNAs (ser, leu) and some tRNAs
         # with a variable arm stem: it picks the variable arm as t-arm instead.
         t_stem = max(after, key=lambda g: g["stem5_cols"][0]) if after else None
-        # a real variable-ARM stem (class-ii: Leu, Ser) is whatever's left
-        # in `after` besides t_stem; only trusted when exactly one such
-        # candidate remains; with a single "after" candidate there's no way
-        # to tell a bare variable arm from a missing T-arm from topology
-        # alone, so that ambiguous case is left to the existing missing_arm
-        # machinery (mito.classify_arm_loss) rather than guessed at here.
+        # a class-ii variable-ARM stem (Leu, Ser) is whatever is left in
+        # `after` besides t_stem; only trusted when exactly one such candidate
+        # remains. With a single "after" candidate, topology alone cannot tell
+        # a bare variable arm from a missing T-arm. That ambiguous case goes to
+        # the missing_arm machinery (mito.classify_arm_loss) rather than being
+        # guessed at here.
         v_candidates = [g for g in after if g is not t_stem]
         v_stem = v_candidates[0] if len(v_candidates) == 1 else None
         # a sequence that deleted every base of the arm has no arm to number
@@ -620,11 +609,12 @@ def locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm=None):
                                           + v_stem["loop_cols"] + v_stem["stem3_cols"]):
             v_stem = None
 
-    # outermost D-stem 3' column (strand edge), so the connector (pos 26) starts
-    # only after the whole D-stem 3' strand; a D-stem-internal 3' bulge sits
-    # before this edge and belongs to the D-stem, same strand-boundary reasoning
-    # as the acceptor case below. using the innermost column instead would sweep
-    # that bulge into linker_dc and label it 26 ahead of the real 24/25.
+    # outermost D-stem 3' column (strand edge). The connector (pos 26) starts
+    # only after the whole D-stem 3' strand; a D-stem-internal 3' bulge falls
+    # before this edge and belongs to the D-stem, same strand-boundary
+    # reasoning as the acceptor case below. Using the innermost column instead
+    # would sweep that bulge into linker_dc and label it 26 ahead of the 24/25
+    # it should carry.
     d_stem3_end = d_stem["stem3_cols"][-1] if d_stem else None
     t_open = t_stem["stem5_cols"][0] if t_stem else None
 
@@ -638,12 +628,12 @@ def locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm=None):
 
     var_end = t_open if t_open is not None else (acceptor_3_start if c_close is not None else None)
 
-    # class-ii variable ARM (Leu, Ser): a real nested stem-loop between the
-    # c-arm and t-arm gets the Sprinzl e-series (e11-e17/e1-e5/e21-e27), not
+    # class-ii variable ARM (Leu, Ser): a nested stem-loop between the c-arm
+    # and t-arm gets the Sprinzl e-series (e11-e17/e1-e5/e21-e27) in place of
     # the plain 44-48 sequential run; see sprinzl_map. ct_linker/vt_linker
     # are the (up to 2 / up to 3) unpaired nt flanking the v-stem
     # on either side; var_loop is the no-v-stem fallback (class-i short loop,
-    # or no stem detected), using the previous flat 44-48 behaviour unchanged.
+    # or no stem detected), which numbers 44-48 flat.
     v_stem5 = v_stem["stem5_cols"] if v_stem else []
     v_loop = v_stem["loop_cols"] if v_stem else []
     v_stem3 = v_stem["stem3_cols"] if v_stem else []
@@ -684,9 +674,9 @@ def locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm=None):
         "ct_linker": ct_linker, "vt_linker": vt_linker,
         "v_stem5": v_stem5, "v_loop": v_loop, "v_stem3": v_stem3,
         # starts AFTER the acceptor's 5' strand ends: an acceptor-internal 5'
-        # bulge sits before that edge and belongs to the acceptor, not the
-        # linker (which otherwise mislabels it as a D-arm connector 8/9, or in
-        # the D-armless case as a replacement-loop 8-26 position).
+        # bulge falls before that edge and belongs to the acceptor. Leaving it
+        # to the linker mislabels it as a D-arm connector 8/9, or in the
+        # D-armless case as a replacement-loop 8-26 position.
         "linker_5": unpaired(acceptor_5_end + 1, linker_5_end),
         "linker_dc": unpaired(d_stem3_end + 1, c_stem5[0]) if (d_stem3_end is not None and c_stem) else [],
     }
@@ -777,11 +767,11 @@ def sprinzl_map(ss, seq, anticodon, missing_arm=None):
     _assign_anticodon_loop(labels, seq, arms["c_loop"], anticodon)
     assign_slots(labels, arms["c_stem3"],    [str(i) for i in range(39, 44)])
     if arms["v_stem5"]:
-        # class-ii variable ARM (Leu, Ser): real nested stem-loop, Sprinzl
-        # e-series; see locate_anticodon_stem's v_stem docstring. reserved
-        # space is 7bp/5nt/7bp; anything beyond overflows via assign_slots'
-        # usual letter-suffix mechanism (e.g. 'e17A'), same as every other
-        # insertion-code slot in this scheme.
+        # class-ii variable ARM (Leu, Ser): a nested stem-loop takes the
+        # Sprinzl e-series; see locate_anticodon_stem's v_stem docstring.
+        # reserved space is 7bp/5nt/7bp; anything beyond overflows via
+        # assign_slots' usual letter-suffix mechanism (e.g. 'e17A'), same as
+        # every other insertion-code slot in this scheme.
         # right-aligned on 45 (immediately before e11), same reasoning as
         # _assign_anticodon_loop's "before" segment: a single linker nt here
         # is adjacent to the stem and must get 45, not 44.
@@ -796,11 +786,12 @@ def sprinzl_map(ss, seq, anticodon, missing_arm=None):
     elif len(arms["var_loop"]) > 5:
         # no paired v-stem was threaded, but the variable region is longer
         # than the plain 44-48 5-slot capacity can hold; that excess length
-        # is itself the signal of a real extended variable region (class-ii),
+        # is itself the signal of an extended class-ii variable region,
         # whether or not a stem happens to be threaded there. treat it as
         # loop-only: 44/45 before, e1-e5 (+letter-suffix overflow on e5 for
-        # anything beyond 5nt) in the middle, 46/47/48 after, not a bigger
-        # 44-48-derived overflow run, which was never a real Sprinzl code.
+        # anything beyond 5nt) in the middle, 46/47/48 after. A bigger
+        # 44-48-derived overflow run would invent Sprinzl codes that the
+        # scheme never defined.
         var_loop = arms["var_loop"]
         before, middle, after = var_loop[:2], var_loop[2:-3], var_loop[-3:]
         assign_slots(labels, before, ["44", "45"])
@@ -815,7 +806,7 @@ def sprinzl_map(ss, seq, anticodon, missing_arm=None):
     # strand ranges (first..last paired column of each stem strand); a
     # single-sided bulge is an unpaired column WITHIN one of these, which forgi
     # leaves outside the stem's own stem/loop columns. pass them so
-    # _fill_stem_bulges only fills positions a stem actually owns.
+    # _fill_stem_bulges only fills positions inside a stem's span.
     strands = [topo["acceptor_5"], topo["acceptor_3"]]
     for g in topo["inner_stems"]:
         strands += [g["stem5_cols"], g["stem3_cols"]]
@@ -825,13 +816,13 @@ def sprinzl_map(ss, seq, anticodon, missing_arm=None):
 
 def _fill_stem_bulges(labels, ss, strands):
     """a single-sided bulge inside a stem (see _forgi_stem_groups: the bulged
-    nucleotide sits outside the merged stem's own stem/loop columns, by
-    construction) is a real nucleotide with no named Sprinzl slot; letter-
-    suffix it onto the preceding assigned position, the same insertion-code
-    convention assign_slots uses for trailing overhangs (60A, ...). ownership
-    is checked against `strands` (each stem strand's first..last column span):
-    only an unlabeled '.' that a stem actually spans counts as a bulge. every
-    such bulge in real tRNA data is a cmalign insert column (#=GC RF == '.'),
+    nucleotide falls outside the merged stem's own stem/loop columns, by
+    construction) is a base with no named Sprinzl slot; letter-suffix it onto
+    the preceding assigned position, the same insertion-code convention
+    assign_slots uses for trailing overhangs (60A, ...). ownership is checked
+    against `strands` (each stem strand's first..last column span): only an
+    unlabeled '.' that a stem actually spans counts as a bulge. every such
+    bulge seen in tRNA data is a cmalign insert column (#=GC RF == '.') and
     never a model-consensus position, and the Sprinzl scheme has no canonical
     number for a stem bulge, so a suffix is the right label. mutates labels in
     place. an unlabeled '.' outside every stem strand, or any unlabeled paired
@@ -961,7 +952,7 @@ def _raw_to_final_index(aligned_seq):
 def _split_occupied(aligned_seq, cols, n_head, n_tail):
     """split cols into (head, middle, tail): head/tail hold exactly n_head/
     n_tail occupied columns each; an interleaved gap column rides along with
-    whichever side owns the adjacent occupied column."""
+    whichever side holds the adjacent occupied column."""
     occ_idx = [i for i, c in enumerate(cols) if _is_occupied(aligned_seq, c)]
     head_end = occ_idx[n_head - 1] + 1 if n_head else 0
     tail_start = occ_idx[-n_tail] if n_tail else len(cols)
@@ -990,7 +981,7 @@ def _assign_plain_zip(labels, cols, core_slots, aligned_seq, raw_to_final,
     """assign core_slots, in order, to cols' occupied columns only, skipping
     gaps entirely rather than treating them as match-state deletions that
     advance the pool with no output. for blocks where match/insert-state
-    carries no reliable Sprinzl meaning: the CCA trailer, which sits past the
+    carries no reliable Sprinzl meaning: the CCA trailer, which falls past the
     model's own consensus structure, and any block holding exactly as many
     bases as slots. returns the last label written, same contract as
     _assign_block."""
@@ -1078,7 +1069,7 @@ D_LOOP_3P_SLOTS = ["20", "20a", "20b"]
 def _d_loop_slots_from_gg(bases):
     """slots for a D-loop, seating the GG that Biela et al. 2023 report at 18
     and 19 on those two positions and spending the rest outward from it. None
-    when no GG sits close enough to 18 to be that pair.
+    when no GG lies close enough to 18 to be that pair.
 
     Counting slots from 14 instead gets the common eight-base loop wrong: it
     fills 14-21 solid, which lands the GG on 17-18, because 17 stays empty
@@ -1090,7 +1081,7 @@ def _d_loop_slots_from_gg(bases):
         after = n - k - 2
         if after > len(D_LOOP_3P_SLOTS) + 1:
             return None
-        # 21 closes the loop against the D-stem, so it takes the last base and
+        # 21 closes the loop against the D-stem and takes the last base;
         # 20/20a/20b fill the gap left in front of it
         tail = D_LOOP_3P_SLOTS[:after - 1] + ["21"] if after else []
         return D_LOOP_5P_SLOTS[:k] + ["18", "19"] + tail
@@ -1132,7 +1123,7 @@ def _absorb_unclaimed_columns(specs):
 
     forgi reports a stem's paired columns only, so a stem-internal bulge lands
     in no block's own column list and would otherwise go unlabeled. Handing it
-    to the block it sits inside puts it through the same insertion rule as any
+    to the enclosing block puts it through the same insertion rule as any
     other unpaired column, which suffixes it onto the label before it."""
     out = []
     for i, (cols, core_slots, pools, mode) in enumerate(specs):
@@ -1225,12 +1216,12 @@ def sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None, wc=False,
     labels, suffix_counts, anchor = {}, {}, None
     for cols, core_slots, pools, mode in specs:
         # a block holding exactly as many bases as it has slots has only one
-        # consistent labelling, so the CM's view of which columns are
-        # matches carries no extra information there - and acting on it does
-        # harm when the CM threaded the block poorly, which mt-tRNA loops
-        # frequently do (bases parked in insert columns while the consensus
-        # columns beside them are called deletions). read match/insert state
-        # only where the counts disagree and the placement is in question.
+        # consistent labelling. The CM's view of which columns are matches
+        # carries no extra information there, and acting on it does harm when
+        # the CM threaded the block poorly, which mt-tRNA loops frequently do
+        # (bases parked in insert columns while the consensus columns beside
+        # them are called deletions). read match/insert state only where the
+        # counts disagree and the placement is in question.
         n_bases = _occupied_count(aligned_seq, cols)
         if mode == "d_loop":
             anchored = _d_loop_slots_from_gg(_occupied_bases(aligned_seq, cols))
@@ -1263,7 +1254,7 @@ MAX_STEM_SLIDE = 2
 
 
 def slide_offsets(max_slide):
-    """offsets to try, nearest first, so the smallest move that gains wins."""
+    """offsets to try, nearest first: the smallest move that gains wins."""
     return sorted([d for d in range(-max_slide, max_slide + 1) if d],
                   key=lambda d: (abs(d), d))
 
@@ -1287,10 +1278,9 @@ def wuss_stems(ss_cons):
     """internal stems as [{'pairs': [(5' col, 3' col), ...]}, ...], 5'->3'.
     e.g. [{'pairs': [(10,25), (11,24), (12,23)]}, {'pairs': [(49,65), (50,64), (51,63)]}]
 
-    WUSS marks the acceptor stem '(' ')' and every internal stem '<' '>', so
-    the arms come from the consensus line. 
-    Nested pairs belong to one stem; a disjoint span
-    starts the next."""
+    WUSS marks the acceptor stem '(' ')' and every internal stem '<' '>'. The
+    arms therefore come straight off the consensus line. Nested pairs belong
+    to one stem; a disjoint span starts the next."""
     stack, pairs = [], []
     for col, sym in enumerate(ss_cons):
         if sym == "<":
@@ -1314,11 +1304,11 @@ def _column_offset_for_bases(aligned_seq, edge, steps, direction, taken):
     """columns from `edge` out to the `steps`-th free base beyond it, in
     `direction`.
 
-    Only columns holding a base count, so deletions are stepped over, and
-    only columns no other helix owns, so the count never runs through a
-    neighbouring stem. Returns None when another helix or the end of the
-    sequence arrives first: with no free base to move onto, there is nothing
-    to slide."""
+    Only columns holding a base count, which steps over deletions, and only
+    columns claimed by no other helix, which keeps the count from running
+    through a neighbouring stem. Returns None when another helix or the end of
+    the sequence arrives first: with no free base to move onto, there is
+    nothing to slide."""
     seen, col = 0, edge + direction
     while 0 <= col < len(aligned_seq):
         if col in taken:
@@ -1334,9 +1324,9 @@ def _column_offset_for_bases(aligned_seq, edge, steps, direction, taken):
 def slide_stems_in_alignment(aligned_seq, ss_cons, max_slide=1, header=""):
     """re-seat internal stems on the consensus line; returns a new ss_cons.
 
-    The whole helix moves by one column offset, so it stays a helix. The
-    offset is measured in free bases rather than columns: one step lands on
-    the next base that no other helix owns, stepping over deletions.
+    The whole helix moves by one column offset and stays a helix. The offset
+    is measured in free bases rather than columns: one step lands on the next
+    base claimed by no other helix, stepping over deletions.
 
     The anticodon stem stays put, since the numbering is anchored to it, and
     the acceptor stem is '(' ')' in WUSS so it is never a candidate. A move

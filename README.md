@@ -18,8 +18,8 @@ header conventions it understands) and a `--scheme`:
   (Ozerova et al. 2024).
 - **`euk` / `arch` / `bact`**: aligns each sequence to the matching
   per-isotype covariance model for that domain (from tRNAscan-SE). Cytosolic and
-  nuclear tRNAs don't lose an arm the way mt-tRNAs do, so there's no
-  arm-loss step on this path.
+  nuclear tRNAs don't lose an arm the way mt-tRNAs do. There is no arm-loss
+  step on this path.
 
 Either way, sprinx then assigns a Sprinzl position to every nucleotide. The
 output is a per-nucleotide TSV: Sprinzl position, structural region, which
@@ -57,11 +57,11 @@ pip install git+https://github.com/dieterich-lab/sprinx.git@<commithash>
 
 Three commands, in order, from a FASTA of mt-tRNAs to a Sprinzl-labeled TSV,
 QuTRNA2's `seq_to_sprinzl.tsv` format, and a PNG of the 2D structures. The
-default bundled CMs cover bacterial & metazoan mt-tRNAs, so no `--canonical-cm`/
-`--armless-cm-dir` is needed here (see "CM files" below to override them).
-This runs as-is from a clone with no extra downloads (assumes the venv above
-is activated, `cmalign` is on `PATH`, and R2DT is reachable for the last
-command; see "Dependencies not on PyPI" below):
+default bundled CMs cover bacterial & metazoan mt-tRNAs, and no
+`--canonical-cm`/`--armless-cm-dir` is needed here (see "CM files" below to
+override them). This runs as-is from a clone with no extra downloads (assumes
+the venv above is activated, `cmalign` is on `PATH`, and R2DT is reachable for
+the last command; see "Dependencies not on PyPI" below):
 
 ```bash
 sprinx --scheme mito --fasta data/mito/canonical.fa --out sprinzl_mapping.tsv
@@ -75,52 +75,67 @@ python scripts/visualize_ss.py --tsv sprinzl_mapping.tsv --out cloverleaves.png
 
 ### `--scheme mito`
 
+Each step names the function that implements it. Thresholds are commented at
+their own definitions.
+
 1. `cmalign` each sequence against every canonical CM tier
    (`--notrunc --nonbanded -g`; default tiers: a bacterial whole-family CM,
    then per-AA metazoan CMs). Keep the tier that anchors the anticodon and
    accounts for the most total base-paired columns across all stems (ties go
    to the earlier tier).
+   [`select_cm_and_align`](src/sprinx/mito.py#L485)
 2. Locate the anticodon by position: the D-arm always precedes it, any
    variable arm and the T-arm always follow it. If it turns up in the first
    stem-loop instead of the second, the D-arm didn't occupy its own slot -
    D-arm missing.
+   [`classify_arm_loss`](src/sprinx/mito.py#L182)
 3. Otherwise, check each stem: absent if it has fewer than 3 non-gap column
-   pairs, or fewer than 2 of those are real WC/wobble pairs. This flags the
+   pairs ([`MIN_STEM_PAIRS`](src/sprinx/mito.py#L172)), or fewer than 2 of
+   those are WC/wobble pairs
+   ([`MIN_COMPATIBLE_PAIRS`](src/sprinx/mito.py#L175)). This flags the
    D-arm, the T-arm, both, or neither.
+   [`absent`](src/sprinx/mito.py#L215)
 4. For any arm flagged absent (other than a D-arm caught by step 2): does
    that span have enough sequence to physically close a hairpin (stem length
-   + 3 nt)? If not, that's an arm loss. If so, fold just that span with
-   RNAfold: a fold means cmalign mis-threaded the arm (patch it in place
-   with the fold); no fold means arm loss after all.
-5. Real arm loss: reroute to the matching armless CM (Ozerova et al.
+   + 3 nt, [`MIN_HAIRPIN_LOOP`](src/sprinx/mito.py#L164))? If not, that's an
+   arm loss. If so, fold just that span with RNAfold: a fold means cmalign
+   mis-threaded the arm (patch it in place with the fold); no fold means arm
+   loss after all.
+   [`arm_span_has_enough_sequence`](src/sprinx/mito.py#L323), then
+   [`arm_is_threading_failure`](src/sprinx/mito.py#L362), patched by
+   [`patch_threading_failure_arm`](src/sprinx/mito.py#L372)
+5. Arm actually gone: reroute to the matching armless CM (Ozerova et al.
    2024), isoacceptor ties broken by anticodon. Otherwise: assign Sprinzl
    labels on the alignment already in hand.
+   [`resolve_armless_cm`](src/sprinx/mito.py#L444)
 
-Exact thresholds and function names for each step are in the module
-docstring at the top of [src/sprinx/mito.py](src/sprinx/mito.py).
+Why scores never decide between models of different structure is commented
+directly above [`select_cm_and_align`](src/sprinx/mito.py#L485), and the
+evidence for it is under "Why not just pick the best-scoring model?" below.
 
 ### `--scheme euk` / `arch` / `bact`
 
 1. Resolve the header's aa field to the matching CM in that domain's
    combined per-isotype database (e.g. `euk-Ala`, `euk-iMet`, `euk-SeC`).
    `Ile2`/`iMet`/`fMet` are structurally distinct tRNAs that happen to
-   share an amino acid identity, so this lookup matches the full field
-   exactly.
+   share an amino acid identity. The lookup matches the full field exactly.
 2. `cmalign` directly against that one CM. Unlike the `mito` scheme,
-   every cyto domain's database has one tRNAScan-SE CM per aa field,
-   so there's no tier to fall back on if the alignment is poor.
+   every cyto domain's database has one tRNAScan-SE CM per aa field, and
+   there is no tier to fall back on if the alignment is poor.
 3. Assign Sprinzl labels on the resulting alignment. Cytosolic/nuclear
-   tRNAs don't lose arms the way mt-tRNAs do, so this path skips the
-   arm-loss diagnosis entirely.
+   tRNAs don't lose arms the way mt-tRNAs do. This path skips the arm-loss
+   diagnosis entirely.
 
-The CM naming convention and selection details are in the module docstring
-at the top of [src/sprinx/cyto.py](src/sprinx/cyto.py).
+Steps 1 and 2 are
+[`select_cyto_cm_and_align`](src/sprinx/cyto.py#L87). The CM naming
+convention is in the module docstring at the top of
+[src/sprinx/cyto.py](src/sprinx/cyto.py).
 
 ### Labeling shortened loops and retained bases
 
-An arm can hold fewer bases than CM reserves slots for, so some slots stay
-empty. Retained bases are the ones that typically form tertiary contacts,
-so they are labeled and other positions are dropped preferentially.
+An arm can hold fewer bases than CM reserves slots for, leaving some slots
+empty. Retained bases are the ones that typically form tertiary contacts.
+They are labeled and other positions dropped preferentially.
 
 In the variable region those retained typically are 44, 45, 46 and 48: G26-A44, G10-C25-G45,
 C13-G22-G46, and the Levitt pair G15-C48 (Biela et al. 2023). Each of them is mediated by a
@@ -173,7 +188,7 @@ available after a plain `pip install`:
     ```
 - **`--scheme euk`/`arch`/`bact`** defaults to that domain's combined
   per-isotype CM database (tRNAscan-SE), one CM per amino acid. These aren't
-  clade- or organism-specific, so no override is normally needed; use
+  clade- or organism-specific. No override is normally needed; use
   `--cyto-cm-db` only to point at a different database entirely.
 
 To override the `mito` defaults for a different clade, supply your own
@@ -182,7 +197,7 @@ syntax each flag accepts.
 
 The repo's `data/mito/` and `data/cyto/` directories hold the FASTA test
 sequences the test suite and the examples above use (the CM databases
-themselves live under `src/sprinx/data/`, since they ship as package data);
+themselves are under `src/sprinx/data/`, since they ship as package data);
 see "Layout" below.
 
 ## Limitations
@@ -230,15 +245,16 @@ Ascaris Asn (mtdbD00031155), the top two E-value hits are `armless_trnP_wo_t`
 (Pro) and `H.seed25-1` (His); the true Asn model doesn't place in the top two
 at all.
 
-An armless CM has fewer columns than a canonical one, so it scores short
+An armless CM has fewer columns than a canonical one. It scores short
 mt-tRNA sequences well for reasons unrelated to isotype match. E-value
 corrects for database size only; it doesn't account for how much structure a
-model attempts to score, so scores across differently-sized models aren't
+model attempts to score. Scores across differently-sized models are not
 comparable.
 
 sprinx instead tries one canonical model at a time and moves on only when
-the alignment fails to anchor the anticodon; see the module docstring at the
-top of [src/sprinx/mito.py](src/sprinx/mito.py) for the full mechanism.
+the alignment fails to anchor the anticodon:
+[`select_cm_and_align`](src/sprinx/mito.py#L485), with the reasoning
+commented directly above it.
 
 ## Header format
 
@@ -252,7 +268,7 @@ Headers must use one of three forms:
 The anticodon field is what drives model selection and arm-loss detection.
 The aa field only picks which armless (or per-AA canonical) model family to
 search; it has no other role. The GtRNAdb form never carries an isoacceptor
-digit, so Leu and Ser each cover two anticodons under the same bare aa name.
+digit. Leu and Ser each cover two anticodons under the same bare aa name.
 When that happens, sprinx tries each matching model and keeps whichever one
 anchors the anticodon, i.e. the same approach used to disambiguate
 filename-suffixed isoacceptor models (Leu1/Leu2, Ser1/Ser2).
@@ -292,10 +308,10 @@ Every processed sequence gets exactly one call:
 | `BOTH_ARMS_MISSING_slots=[n,..]` | D-arm and T-arm both missing; reroutes to `armless_trn{AA}_wo_d_and_t.cm` |
 | `UNANCHORED_fallback_structurally_absent=[n,..]` | anticodon couldn't be pinned down uniquely (ambiguous AT-rich triplet); less reliable than the other calls |
 
-A threading failure (alignment went wrong, arm isn't actually missing) logs
-as a separate line: "CM diagnosed X-arm missing (...) but
-the span folds as a real hairpin ... patching via RNAfold." A patch that
-would conflict with existing structure is skipped and logged at DEBUG level.
+A threading failure (alignment went wrong, the arm is present after all) logs
+as a separate line: "CM diagnosed X-arm missing (...) but the span folds as a
+hairpin ... patching via RNAfold." A patch that would conflict with existing
+structure is skipped and logged at DEBUG level.
 
 ### Rendering 2D diagrams
 
@@ -304,7 +320,7 @@ package. R2DT is a container, which is unnecessary for anything just
 consuming sprinx's TSV output, e.g. QutRNA2. Example usage:
 
 ```bash
-# docker on hand: nothing else to pass
+# docker on hand: no extra arguments
 python scripts/visualize_ss.py --tsv sprinzl_mapping.tsv --out cloverleaves.png
 
 # a container image, e.g. on a cluster with apptainer or singularity
@@ -325,7 +341,7 @@ disagree with whatever structure R2DT would derive on its own from its
 template library. For any sequence that got an RNAfold patch, two extra
 files are also written, containing just those sequences: `_CMonly` (the
 structure before the patch) and `_RNAfoldOnly` (the same sequence folded
-naively as a whole, no CM at all), so the patch's effect is visible side by
+naively as a whole, no CM at all). The patch's effect is visible side by
 side.
 
 ### Converting to QuTRNA2's format
@@ -355,7 +371,7 @@ scripts/
   visualize_ss.py                              standalone R2DT 2D-diagram rendering
   convert_output_to_qutrna2-seq_to_sprinzl.py   converts to QuTRNA2's seq_to_sprinzl.tsv format
   generate_synthetic_cyto_seqs.py               rebuilds data/cyto/{euk,arch,bact}.fa from the bundled CMs
-  fetch_gtrnadb_seqs.py                         fetches real sequences into data/cyto/*_gtrnadb.fa
+  fetch_gtrnadb_seqs.py                         fetches GtRNAdb sequences into data/cyto/*_gtrnadb.fa
 recipe/
   meta.yaml         conda recipe
 conftest.py         pytest setup, loads .env / SPRINX_* vars for integration tests
@@ -365,7 +381,7 @@ data/
   cyto/             test sequences for --scheme euk/arch/bact; see data/cyto/README.md
 tests/
   test_sprinx_unit.py          unit tests, run anywhere
-  test_sprinx_integration.py   runs real cmalign / RNAfold end to end
+  test_sprinx_integration.py   runs live cmalign / RNAfold end to end
   data/
     test_data_bundle.txt       precomputed Stockholm alignments for the unit tests
     conserved_positions.tsv    nucleotides conserved across tRNAs, per Biela et al. 2023
@@ -374,7 +390,7 @@ output/             example run artifacts (TSVs, PNGs)
 
 ## Testing
 
-`pytest` lives in the `test` extra.
+`pytest` is in the `test` extra.
 
 ```bash
 uv run --extra test pytest tests/test_sprinx_unit.py

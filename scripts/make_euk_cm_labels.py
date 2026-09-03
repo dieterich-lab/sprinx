@@ -1,34 +1,36 @@
-"""Build tests/data/euk_gtrnadb_cm_labels.tsv from a QutRNA2 seq_to_sprinzl table.
+"""make_euk_cm_labels.py - build the euk Sprinzl label fixture from QutRNA2
 
-The labels come from QutRNA2's covariance-model path, which predates sprinx and
-is what euk users' published coordinates already are. With a QutRNA2 checkout at
-$Q, and cmalign on PATH:
-
-    cmalign --notrunc --nonbanded -g -o align.stk \\
-        $Q/data/TRNAinf-euk.cm data/cyto/euk_gtrnadb.fa
-
-    python $Q/workflow/scripts/sprinzl_utils.py stk-to-afasta \\
-        --output ref.afasta align.stk
-
-    python $Q/workflow/scripts/sprinzl_utils.py consensus-labels \\
-        --labels $Q/data/nuclear-euk-masked.txt \\
-        --output consensus_labels.tsv align.stk
-
-    python $Q/workflow/scripts/sprinzl_utils.py afasta-to-sprinzl \\
-        --consensus-labels consensus_labels.tsv \\
-        --output seq_to_sprinzl.tsv ref.afasta
-
-    python scripts/make_euk_cm_labels.py seq_to_sprinzl.tsv \\
-        data/cyto/euk_gtrnadb.fa tests/data/euk_gtrnadb_cm_labels.tsv
-
-Those four QutRNA2 commands are what sec_structure.smk cm branch runs, and
-the fixture tracks that path.
+input:   a QutRNA2 seq_to_sprinzl table and data/cyto/euk_gtrnadb.fa
+output:  tests/data/euk_gtrnadb_cm_labels.tsv
+usage:   python scripts/make_euk_cm_labels.py seq_to_sprinzl.tsv \\
+             data/cyto/euk_gtrnadb.fa tests/data/euk_gtrnadb_cm_labels.tsv
+env:     none here; producing the input table needs cmalign, see below
+notes:   the labels come from QutRNA2's covariance-model path, which predates
+         sprinx and is what euk users' published coordinates already are
 """
 import collections
 import csv
 import sys
 
-# the species the QutRNA2 paper reports. Other sequences are dropped, so the
+# the four QutRNA2 commands that produce the input table, from a checkout at $Q
+# with cmalign on PATH. sec_structure.smk's cm branch runs this same path, and
+# the fixture tracks it.
+#
+#     cmalign --notrunc --nonbanded -g -o align.stk \
+#         $Q/data/TRNAinf-euk.cm data/cyto/euk_gtrnadb.fa
+#
+#     python $Q/workflow/scripts/sprinzl_utils.py stk-to-afasta \
+#         --output ref.afasta align.stk
+#
+#     python $Q/workflow/scripts/sprinzl_utils.py consensus-labels \
+#         --labels $Q/data/nuclear-euk-masked.txt \
+#         --output consensus_labels.tsv align.stk
+#
+#     python $Q/workflow/scripts/sprinzl_utils.py afasta-to-sprinzl \
+#         --consensus-labels consensus_labels.tsv \
+#         --output seq_to_sprinzl.tsv ref.afasta
+
+# the species the QutRNA2 paper reports. Other sequences are dropped, and the
 # fixture holds only coordinates somebody published.
 SPECIES = ("Homo_sapiens", "Mus_musculus", "Schizosaccharomyces_pombe")
 
@@ -79,7 +81,7 @@ def main(table_path, fasta_path, out_path):
 
     with open(out_path, "w", encoding="utf-8") as fh:
         fh.write(HEADER)
-        # commonest labeling first, so the ordinary cases read before the oddities
+        # commonest labeling first: the ordinary cases read before the oddities
         for packed, names in sorted(by_pattern.items(), key=lambda kv: (-len(kv[1]), kv[0])):
             fh.write(f"labels\t{packed}\n")
             for name in sorted(names):
