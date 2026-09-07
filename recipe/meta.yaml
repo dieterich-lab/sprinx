@@ -32,8 +32,10 @@ requirements:
 test:
   imports:
     - sprinx
-    - sprinx.label
     - sprinx.cli
+    - sprinx.common
+    - sprinx.mito
+    - sprinx.cyto
   commands:
     - sprinx --help
     - cmalign -h

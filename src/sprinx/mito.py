@@ -3,7 +3,7 @@
 input:   one mt-tRNA (header, seq), plus the canonical and armless CM sources
 output:  the alignment to use, which CM produced it, and the arm-loss call
 usage:   from sprinx.mito import select_cm_and_align, classify_arm_loss
-env:     cmalign and RNAfold on PATH
+env:     cmalign on PATH; folding runs in process through ViennaRNA
 notes:   mt-tRNAs can lose the D-arm, the T-arm or both (Ozerova et al. 2024)
          and cyto.py has no equivalent step. armless CMs are named
          armless_trn{AA}_wo_{d,t,d_and_t}.cm. a --canonical-cm source is

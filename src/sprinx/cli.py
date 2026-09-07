@@ -3,7 +3,7 @@
 input:   a tRNA FASTA and a --scheme, plus optional CM overrides
 output:  one TSV row per position, written to --out
 usage:   sprinx --help    (see also README.md)
-env:     cmalign, cmfetch and RNAfold on PATH
+env:     cmalign, cmstat and cmfetch on PATH
 notes:   argument parsing and per-record orchestration only. common.py does
          the labeling, mito.py and cyto.py the per-scheme CM selection.
          scripts/visualize_ss.py renders the TSV and is outside the package,
