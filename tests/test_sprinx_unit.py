@@ -513,5 +513,71 @@ def test_aa_field_to_cm_code():
         assert common.aa_field_to_cm_code(aa, keys) == code, aa
 
 
+def _t_loop_slots(n_bases):
+    """Slots for a T-loop of n_bases, sized as the block dispatch sizes them."""
+    slots = list(common.T_LOOP_SLOTS)
+    if n_bases < len(slots):
+        return common._shrink_slots(slots, n_bases, common.T_LOOP_DROP_ORDER)
+    return slots
+
+
+def _t_loop_labels(aligned_seq, ss_cons, anticodon):
+    """Labels of the T-loop columns for one alignment, 5'->3'.
+
+    Locates the arm as the mapper does. The last inner stem is not reliable:
+    on some sequences it is the anticodon arm."""
+    alignment = {"aligned_seq": aligned_seq, "ss_cons": ss_cons}
+    raw_db = common.drop_orphan_brackets(RNA.db_from_WUSS(ss_cons))
+    topo = common.parse_topology(raw_db)
+    arms = common.locate_anticodon_stem(topo, raw_db, aligned_seq, anticodon)
+    sprinzl = common.sprinzl_map_from_alignment(alignment, anticodon)
+    raw_to_final = common._raw_to_final_index(aligned_seq)
+    return [sprinzl[raw_to_final[c]] for c in arms["t_loop"]
+            if c in raw_to_final and raw_to_final[c] in sprinzl]
+
+
+def test_sized_t_loop_slots_stay_an_ordered_subsequence():
+    """Sizing yields n_bases slots in T_LOOP_SLOTS order, down to
+    MIN_HAIRPIN_LOOP. The drop order must name enough slots to reach it."""
+    for n_bases in range(mito.MIN_HAIRPIN_LOOP, len(common.T_LOOP_SLOTS) + 1):
+        got = _t_loop_slots(n_bases)
+        assert len(got) == n_bases
+        assert got == [slot for slot in common.T_LOOP_SLOTS if slot in got]
+
+
+def test_t_loop_never_overflows_when_the_slot_list_can_hold_it():
+    """No T-loop that fits T_LOOP_SLOTS may take a letter-suffix label.
+
+    A suffix means the block fell through to the per-column match/insert walk,
+    which follows the CM's threading over the base count. MT-TK is the motivating
+    case: TRNAinf-bact.cm puts 6 of its 9 loop bases in insert columns.
+
+    Asserts a property, not specific labels. A change of numbering convention
+    must not fail here."""
+    seqs, ss_cons = load_mito_sto("aln_canonical36_qutrna_flags.sto")
+    checked = 0
+    for name, aligned in seqs.items():
+        labels = _t_loop_labels(aligned, ss_cons, name.split("|")[2])
+        if not labels or len(labels) > len(common.T_LOOP_SLOTS):
+            continue
+        checked += 1
+        assert all(lab in common.T_LOOP_SLOTS for lab in labels), (name, labels)
+    assert checked >= 30, f"only {checked} of {len(seqs)} sequences exercised"
+
+
+def test_t_loop_slots_follow_the_suzuki_convention():
+    """Pins the numbering convention. The convention is a choice.
+
+    Suzuki et al. 2020 is used because QutRNA2's reference table derives from
+    it. Kuhle et al. 2023 read 53a and 60a as a sixth T-stem pair closing a
+    6 nt loop. Under that reading an 8-base loop takes 53a, 54-58 and 60a.
+
+    A different reference means editing these expectations."""
+    assert _t_loop_slots(9) == ["53a", "54", "55", "56", "57", "58", "59", "60", "60a"]
+    assert _t_loop_slots(8) == ["54", "55", "56", "57", "58", "59", "60", "60a"]
+    assert _t_loop_slots(7) == ["54", "55", "56", "57", "58", "59", "60"]
+    assert _t_loop_slots(6) == ["54", "55", "56", "57", "58", "59"]
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))

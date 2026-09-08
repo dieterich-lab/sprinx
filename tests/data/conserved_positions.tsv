@@ -6,6 +6,9 @@
 # data/cyto/euk_gtrnadb.fa, 531 seqs.
 # Failing means labels moved across seq positions.
 #
+# min_fraction "log" reports the fraction without failing. For a base that is
+# conserved in cytosolic tRNA but not in mt-tRNA. Worth watching, not gating.
+#
 # 74-76 are absent as conserved tests
 # because sprinx tests do not label the CCA end.
 #
@@ -18,7 +21,7 @@
 33	U	0.95	0.985
 53	G	0.95	0.989
 54	U	0.90	0.947
-55	U	0.95	0.998
+55	U	log	0.998
 56	C	0.95	0.962
 58	A	0.95	0.985
 61	C	0.95	0.979

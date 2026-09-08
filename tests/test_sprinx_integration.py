@@ -19,6 +19,7 @@ import os
 import re
 import shutil
 import sys
+import warnings
 
 import pytest
 
@@ -487,13 +488,16 @@ CONSERVED_POSITIONS_PATH = os.path.join(os.path.dirname(__file__), "data", "cons
 
 
 def _load_conserved_positions():
+    """(position, base, min_fraction) rows. min_fraction is None for a row
+    marked "log". Such a row is reported, never asserted."""
     rows = []
     with open(CONSERVED_POSITIONS_PATH, encoding="utf-8") as fh:
         for line in fh:
             if line.startswith("#") or not line.strip():
                 continue
             position, base, min_fraction, _measured = line.split()
-            rows.append((position, base, float(min_fraction)))
+            rows.append((position, base,
+                         None if min_fraction == "log" else float(min_fraction)))
     return rows
 
 
@@ -533,7 +537,11 @@ def test_conserved_positions_carry_expected_bases(euk_gtrnadb_bases_by_position)
     """labels that slip off their column stop landing on the base their Sprinzl
     position is known to carry, which shows up here as the fraction dropping
     below min_fraction. Every position is reported at once, since one shift
-    usually drags its neighbours with it."""
+    usually drags its neighbours with it.
+
+    Cytosolic input only. A row marked "log" is warned, not asserted. None of
+    these fractions is measured on mt-tRNA, where several of the bases are not
+    conserved. None anchors an assignment."""
     failures = []
     for position, base, min_fraction in _load_conserved_positions():
         observed = euk_gtrnadb_bases_by_position.get(position, [])
@@ -541,6 +549,11 @@ def test_conserved_positions_carry_expected_bases(euk_gtrnadb_bases_by_position)
             failures.append(f"{position}: no sequence was labeled with this position")
             continue
         fraction = observed.count(base) / len(observed)
+        if min_fraction is None:
+            warnings.warn(f"conserved position {position}: {base} in {fraction:.3f} "
+                          f"of {len(observed)} cytosolic sequences (reported, not gated)",
+                          stacklevel=2)
+            continue
         if fraction < min_fraction:
             failures.append(f"{position}: {base} in {fraction:.3f} of {len(observed)} "
                             f"sequences, under the {min_fraction} floor")

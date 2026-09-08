@@ -47,8 +47,7 @@ SPRINZL_REGION = {}
 for _p in range(1, 8):   SPRINZL_REGION[str(_p)] = "acceptor_5"
 for _p in (8, 9):         SPRINZL_REGION[str(_p)] = "connector_AD"
 for _p in range(10, 14):  SPRINZL_REGION[str(_p)] = "D_stem_5"
-for _p in list(range(14, 22)) + ["17a", "20a", "20b"]:
-    SPRINZL_REGION[str(_p)] = "D_loop"
+for _p in range(14, 22):  SPRINZL_REGION[str(_p)] = "D_loop"
 for _p in range(22, 26):  SPRINZL_REGION[str(_p)] = "D_stem_3"
 SPRINZL_REGION["26"] = "connector_DC"
 for _p in range(27, 32):  SPRINZL_REGION[str(_p)] = "C_stem_5"
@@ -61,9 +60,26 @@ for _p in range(1, 6):    SPRINZL_REGION[f"e{_p}"] = "V_loop"
 for _p in range(1, 8):    SPRINZL_REGION[f"e2{_p}"] = "V_stem_3"
 for _p in range(49, 54):  SPRINZL_REGION[str(_p)] = "T_stem_5"
 for _p in range(54, 61):  SPRINZL_REGION[str(_p)] = "T_loop"
+# the only insertion code whose anchor belongs to another region. 53 is a stem
+# position; Suzuki reads 53a as a loop base. Every other code inherits.
+SPRINZL_REGION["53a"] = "T_loop"
 for _p in range(61, 66):  SPRINZL_REGION[str(_p)] = "T_stem_3"
 for _p in range(66, 73):  SPRINZL_REGION[str(_p)] = "acceptor_3"
 for _p in range(73, 77):  SPRINZL_REGION[str(_p)] = "discriminator_CCA"
+
+
+def sprinzl_region(label):
+    """Structural region for a Sprinzl label. "" when unlabeled.
+
+    A suffixed label takes its anchor's region: 17a, 20a, 20b, 60a, 60A, e17A.
+    An explicit entry overrides that.
+    """
+    if not label:
+        return ""
+    if label in SPRINZL_REGION:
+        return SPRINZL_REGION[label]
+    # variable-arm labels are not purely numeric; the anchor keeps its 'e'
+    return SPRINZL_REGION.get(re.match(r"e?\d+", label).group(), "")
 
 
 # --- generic helpers ---
@@ -1047,10 +1063,15 @@ D_LOOP_DROP_ORDER = ["17", "20", "16", "19", "18"]
 # the D-loop takes its extra bases at 20a/20b far more often than at 17a
 D_LOOP_INSERTION_ORDER = ["20a", "20b", "17a"]
 
-# a short T-loop empties from its ends inward, alternating 3' then 5', and keeps
-# the 56-58 core. Reproduces every T-loop in Suzuki et al. 2020's curated human
-# mt-tRNAs.
-T_LOOP_DROP_ORDER = ["60", "54", "59", "55"]
+# T-arm insertion codes. Suzuki et al. 2020 read them as loop insertions.
+# Kuhle et al. 2023 read them as a sixth T-stem pair (PDB 7U2B, Suppl. Fig. 5c).
+# Suzuki is taken here, matching QutRNA2's reference table.
+T_LOOP_SLOTS = ["53a", "54", "55", "56", "57", "58", "59", "60", "60a"]
+
+# Insertion codes go first, then the ends inward, keeping the 56-58 core.
+# MT-TS2 orders 53a before 60a: at 8 bases the reference retains 60a. No
+# reference loop is under 6 bases. The tail is convention.
+T_LOOP_DROP_ORDER = ["53a", "60a", "60", "54", "59", "55"]
 
 # 44, 45, 46 and 48 each hold a tertiary contact: G26-A44, G10-C25-G45,
 # C13-G22-G46 and the Levitt pair G15-C48 (Biela et al. 2023). 47 holds none and
@@ -1207,7 +1228,7 @@ def sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None, wc=False,
         block(arms["var_loop"], ["44", "45", "46", "47", "48"], mode="v_loop")
 
     block(arms["t_stem5"], [str(i) for i in range(49, 54)])
-    block(arms["t_loop"], [str(i) for i in range(54, 61)], mode="t_loop")
+    block(arms["t_loop"], list(T_LOOP_SLOTS), mode="t_loop")
     block(arms["t_stem3"], [str(i) for i in range(61, 66)])
 
     specs.sort(key=lambda spec: spec[0][0])

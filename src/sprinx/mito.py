@@ -23,7 +23,6 @@ import RNA
 from loguru import logger
 
 from sprinx.common import (
-    SPRINZL_REGION,
     _configure_logging,
     _forgi_stem_groups,
     _pick_by_anticodon_anchor,
@@ -39,6 +38,7 @@ from sprinx.common import (
     slide_stems_to_improve_pairing,
     sprinzl_map,
     sprinzl_map_from_alignment,
+    sprinzl_region,
     stem_complementarity,
 )
 
@@ -754,18 +754,13 @@ def process_mito_record(args):
     rows = []
     for i, base in enumerate(final_seq):
         label = sprinzl.get(i, "")
-        # 'e'-prefixed variable-arm labels (e11, e1, e23, ...) aren't purely
-        # numeric like every other slot; match the optional 'e' along with
-        # the digits so an overflow-suffixed one (e17A) still resolves to its
-        # base code (e17) for the region lookup, same as '60A' -> '60' does.
-        region_key = re.match(r"e?\d+", label).group() if label else ""
         rows.append(
             {
                 "seq_id": header,
                 "seq_index": i,
                 "nucleotide": base,
                 "sprinzl_position": label,
-                "region": SPRINZL_REGION.get(region_key, ""),
+                "region": sprinzl_region(label),
                 "cm_used": cm_name,
                 "rerouted": routing["rerouted"],
                 "arm_loss_call": diagnosis.get("call"),

@@ -30,8 +30,8 @@ from sprinx.common import (
     header_to_anticodon,
     package_data_path,
     run,
-    SPRINZL_REGION,
     sprinzl_map_from_alignment,
+    sprinzl_region,
 )
 
 ISOTYPE_MODEL_RE = re.compile(r"^[a-z]+-([A-Za-z]+\d*)$")
@@ -174,10 +174,9 @@ def process_cyto_record(args):
     rows = []
     for i, base in enumerate(final_seq):
         label = sprinzl.get(i, "")
-        region_key = re.match(r"e?\d+", label).group() if label else ""
         rows.append({
             "seq_id": header, "seq_index": i, "nucleotide": base,
-            "sprinzl_position": label, "region": SPRINZL_REGION.get(region_key, ""),
+            "sprinzl_position": label, "region": sprinzl_region(label),
             "cm_used": cm_name, "rerouted": False, "arm_loss_call": "",
             "structure": final_ss[i],
             "cm_only_structure": "", "rnafold_only_structure": "",
