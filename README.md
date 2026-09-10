@@ -83,7 +83,7 @@ their own definitions.
    then per-AA metazoan CMs). Keep the tier that anchors the anticodon and
    accounts for the most total base-paired columns across all stems (ties go
    to the earlier tier).
-   [`select_cm_and_align`](src/sprinx/mito.py#L485)
+   [`select_cm_and_align`](src/sprinx/mito.py#L486)
 2. Locate the anticodon by position: the D-arm always precedes it, any
    variable arm and the T-arm always follow it. If it turns up in the first
    stem-loop instead of the second, the D-arm didn't occupy its own slot -
@@ -110,7 +110,7 @@ their own definitions.
    [`resolve_armless_cm`](src/sprinx/mito.py#L444)
 
 Why scores never decide between models of different structure is commented
-directly above [`select_cm_and_align`](src/sprinx/mito.py#L485), and the
+directly above [`select_cm_and_align`](src/sprinx/mito.py#L486), and the
 evidence for it is under "Why not just pick the best-scoring model?" below.
 
 ### `--scheme euk` / `arch` / `bact`
@@ -142,18 +142,30 @@ C13-G22-G46, and the Levitt pair G15-C48 (Biela et al. 2023). Each of them is me
 modified base. 47 typically has no such contact and empties first.
 The D-loop is similarly numbered outward from the conserved G18-G19 pair.
 
-### Stem re-seating (`--wc`)
+### Stem register (`--wc`)
 
-A CM sometimes seats a helix one position off. Before labeling, sprinx checks
-the neighbouring unpaired bases each internal stem could have paired with
-instead, and slides the whole stem there if that gives more Watson-Crick or
-wobble pairs. This is of concern for example when the stem is thermodynamically too short
-to be stable, e.g. a 2-bp D-stem that may not need RNAfold to be patched into
-a 3-bp stem using the adjacent bases.
+A CM can place a helix one position off its best pairing. Before labeling,
+sprinx tests the neighbouring unpaired bases each internal stem could pair
+with instead, and moves the whole stem there on a strict gain in Watson-Crick
+or wobble pairs. A short stem is the common case: moving a 2 bp D-stem onto
+adjacent bases can give a 3 bp stem, which then needs no RNAfold patch.
 
-`--wc 1` (default) checks the adjacent register, `2` also checks one position
-further, `0` disables it. The anticodon stem never moves, since the numbering
-is anchored to it. Changing this changes labels on D- and T-stem bases.
+`--wc 1` (default) tests the adjacent register, `2` also one position further,
+`0` disables it. The anticodon stem never moves; the numbering is anchored to
+it. D- and T-stem labels depend on this setting.
+
+### Stem bulges (`--close-unstable-bulges`)
+
+Moving a stem keeps both strands together and cannot close a gap inside one.
+Where a CM threads a stem with a base skipped on one strand, sprinx re-pairs
+it without the gap on three conditions: the sequence fills fewer loop columns
+than `ss_cons` marks as match states, the threaded structure has free energy
+>= 0 kcal/mol, and the same pairs without the gap have free energy < 0.
+Energies are `RNA.energy_of_struct` over the arm span. Loop width is read per
+stem-loop from the chosen CM.
+
+On by default. Over the bundled data it applies to one arm, the human
+mt-tRNA-Ala T-stem, and changes no cytosolic label.
 
 ## Dependencies not on PyPI
 
@@ -253,7 +265,7 @@ comparable.
 
 sprinx instead tries one canonical model at a time and moves on only when
 the alignment fails to anchor the anticodon:
-[`select_cm_and_align`](src/sprinx/mito.py#L485), with the reasoning
+[`select_cm_and_align`](src/sprinx/mito.py#L486), with the reasoning
 commented directly above it.
 
 ## Header format

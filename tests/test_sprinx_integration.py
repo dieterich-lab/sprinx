@@ -49,7 +49,8 @@ CYTO_DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "cyto")
 
 
 def _load_mito_bundle_fa(key):
-    text = open(MITO_BUNDLE_PATH, encoding="utf-8").read()
+    with open(MITO_BUNDLE_PATH, encoding="utf-8") as handle:
+        text = handle.read()
     chunks = re.split(r"^==> (.+?) <==\n", text, flags=re.MULTILINE)[1:]
     bundle = dict(zip(chunks[0::2], chunks[1::2]))
     seqs, cur = {}, None

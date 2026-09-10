@@ -26,7 +26,8 @@ MITO_BUNDLE_PATH = os.path.join(os.path.dirname(__file__), "data", "test_data_bu
 
 
 def load_mito_bundle():
-    text = open(MITO_BUNDLE_PATH).read()
+    with open(MITO_BUNDLE_PATH) as handle:
+        text = handle.read()
     chunks = re.split(r"^==> (.+?) <==\n", text, flags=re.MULTILINE)[1:]
     return dict(zip(chunks[0::2], chunks[1::2]))
 

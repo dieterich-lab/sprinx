@@ -21,8 +21,8 @@ import warnings
 from collections import defaultdict, namedtuple
 
 import RNA
-from forgi.graph.bulge_graph import BulgeGraph
 from Bio.Data.IUPACData import protein_letters_3to1
+from forgi.graph.bulge_graph import BulgeGraph
 from loguru import logger
 
 warnings.filterwarnings("ignore")
@@ -186,7 +186,7 @@ def check_cm_format(cm_path):
     startup - e.g. old INFERNAL-1.0 CMs. cmalign fails on those too, but
     only deep inside a worker process, with a bare Infernal error and no
     indication which supplied CM caused it."""
-    stdout, stderr, rc = run(["cmstat", cm_path])
+    _stdout, stderr, rc = run(["cmstat", cm_path])
     if rc != 0:
         raise ValueError(f"CM file {cm_path!r} failed cmstat's format check "
                          f"(rc={rc}): {stderr.strip()}")
@@ -209,7 +209,8 @@ def find_cm_files(cm_dir):
     ]
 
 
-def _scan_cm_files(cm_dir, pattern, key_fn, kind, exclude=None, warn_on_conflict=False):
+def _scan_cm_files(cm_dir, pattern, key_fn, kind, exclude=None, *,
+                   warn_on_conflict=False):
     """shared walk-and-regex-match skeleton for CM index builders. key_fn(match)
     turns a regex match into the index key; files that don't match (or match
     `exclude`) are skipped with a debug log rather than binned by inference.
@@ -235,14 +236,16 @@ def _scan_cm_files(cm_dir, pattern, key_fn, kind, exclude=None, warn_on_conflict
 
 # --- cmalign: one call per (sequence, CM) ---
 
-def parse_multi_sto(path_or_text, from_text=False):
+def parse_multi_sto(path_or_text, *, from_text=False):
     """parse a (possibly multi-seq) Stockholm file into ({name: aligned_seq}, ss_cons).
     used by tests only (test_data_bundle.txt); production always calls cmalign_one."""
     seqs = defaultdict(str)
     ss = ""
-    lines = path_or_text.splitlines() if from_text else open(path_or_text, encoding="utf-8")
-    for line in lines:
-        line = line.rstrip("\n")
+    text = path_or_text
+    if not from_text:
+        with open(path_or_text, encoding="utf-8") as handle:
+            text = handle.read()
+    for line in text.splitlines():
         if not line or line.startswith(("//", "#=GS", "#=GR")):
             continue
         if line.startswith("#=GC SS_cons"):

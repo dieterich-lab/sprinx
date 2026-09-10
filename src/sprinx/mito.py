@@ -461,7 +461,8 @@ def resolve_armless_cm(header, seq, aa_code, missing_arm, anticodon, armless_cm_
 
 
 def _routing_result(
-    final_alignment, cm_used, diagnosis, rerouted=False, threading_failure_elem=None
+    final_alignment, cm_used, diagnosis, *, rerouted=False,
+    threading_failure_elem=None
 ):
     """assemble the dict select_cm_and_align returns at each of its exit points.
     the shape is defined once instead of copy-pasted per branch."""
