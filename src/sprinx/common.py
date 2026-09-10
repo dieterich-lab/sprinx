@@ -93,9 +93,9 @@ def run(cmd):
 
 def drop_orphan_brackets(ss):
     """after stripping CM gap columns, a deletion on a paired column leaves its
-    partner bracket dangling. converts unpartnered '(' or ')' to '.' so
-    RNA.ptable() will accept the result. hand-rolled stack walk (not a library
-    call) because this is specific to the gap-stripping context."""
+    partner bracket dangling. converts unpartnered '(' or ')' to '.', which
+    RNA.ptable() accepts. hand-rolled stack walk (not a library call) because
+    this is specific to the gap-stripping context."""
     ss = list(ss)
     stack = []
     for i, c in enumerate(ss):
@@ -118,7 +118,7 @@ def header_to_anticodon(header):
     """extract anticodon from 'id|aa|anticodon|taxon' (field 3), 'anticodon=XXX'
     tag, or a GtRNAdb-style 'tRNA-{AA}-{anticodon}' name (e.g.
     'mt-tRNA-Ala-TGC-1-1') anywhere in the header. returns 3-nt RNA string or
-    None; returns None rather than guessing on format mismatch, since a wrong
+    None; returns None rather than inferring one on format mismatch. a wrong
     anticodon propagates through the entire Sprinzl assignment."""
     fields = header.split("|")
     if len(fields) >= 3 and re.fullmatch(r"[ACGUTacgut]{3}", fields[2]):
@@ -183,9 +183,9 @@ def package_data_path(*parts):
 def check_cm_format(cm_path):
     """run cmstat on a CM file (single-model or multi-model) and raise a
     clear error if it fails. catches an unsupported format up front, at
-    startup - e.g. old INFERNAL-1.0 CMs, which cmalign also refuses, but
-    only after failing deep inside a worker process with a bare Infernal
-    error and no indication which supplied CM caused it."""
+    startup - e.g. old INFERNAL-1.0 CMs. cmalign fails on those too, but
+    only deep inside a worker process, with a bare Infernal error and no
+    indication which supplied CM caused it."""
     stdout, stderr, rc = run(["cmstat", cm_path])
     if rc != 0:
         raise ValueError(f"CM file {cm_path!r} failed cmstat's format check "
@@ -212,10 +212,10 @@ def find_cm_files(cm_dir):
 def _scan_cm_files(cm_dir, pattern, key_fn, kind, exclude=None, warn_on_conflict=False):
     """shared walk-and-regex-match skeleton for CM index builders. key_fn(match)
     turns a regex match into the index key; files that don't match (or match
-    `exclude`) are skipped with a debug log rather than guessed at, since
-    mis-binning here would silently route to the wrong model. warn_on_conflict
-    logs when a later file overwrites an earlier one under the same key, since
-    that silently prefers one file over another rather than erroring."""
+    `exclude`) are skipped with a debug log rather than binned by inference.
+    mis-binning here routes silently to the wrong model. warn_on_conflict logs
+    when a later file overwrites an earlier one under the same key, which
+    selects between them silently instead of raising."""
     index = {}
     for path in find_cm_files(cm_dir):
         base = os.path.basename(path)
@@ -304,7 +304,7 @@ def finalize_structure(alignment):
     re-matching silently re-pair the orphan with an unrelated stem (observed
     corrupting the acceptor stem). fix: read pairing from the full consensus db
     via RNA.ptable before stripping, and null BOTH sides of any pair where
-    either column is gapped here, so stripping can't create an orphan at all."""
+    either column is gapped here. stripping then cannot create an orphan."""
     aligned_seq, ss_cons = alignment["aligned_seq"], alignment["ss_cons"]
     db = list(RNA.db_from_WUSS(ss_cons))
     pt = RNA.ptable("".join(db))
@@ -347,7 +347,7 @@ def _forgi_stem_groups(ss):
     - span
 
     Shared by get_stem_loop_elements (arm-loss diagnosis, mito-only) and
-    parse_topology (Sprinzl labeling, shared), so both use the same physical
+    parse_topology (Sprinzl labeling, shared). Both read the same physical
     stems."""
     db = RNA.db_from_WUSS(ss)
     bg = BulgeGraph.from_dotbracket(db)
@@ -516,10 +516,10 @@ def parse_topology(ss):
     }
 
 
-# D always precedes C; any variable arm and T always follow C. So for a
-# fixed total stem-loop count (other than 2, which is ambiguous either way
-# depending on which arm is missing), the anticodon arm's position is fixed
-# by topology alone: 3 stems (D, C, T) -> C is the middle one; 4 stems
+# D always precedes C; any variable arm and T always follow C. For a fixed
+# total stem-loop count (other than 2, which is ambiguous either way
+# depending on which arm is missing), topology alone fixes the anticodon
+# arm's position: 3 stems (D, C, T) -> C is the middle one; 4 stems
 # (D, C, variable arm, T) -> C is the second one.
 EXPECTED_ANTICODON_ARM_INDEX = {3: 1, 4: 1}
 
@@ -536,8 +536,8 @@ def locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm=None):
       TestSprinzlAssignment::test_d_armless_replacement_loop_gets_d_arm_labels.
 
     How the C-stem is found: by position (EXPECTED_ANTICODON_ARM_INDEX). The
-    anticodon sequence can coincidentally appear in more than one loop, so
-    position is the deciding fact, not loop content.
+    anticodon sequence can appear in more than one loop by coincidence.
+    Position decides, not loop content.
     - The anticodon search still runs, but only as a sanity check: does the
       position-derived C-stem's own loop actually contain it? A mismatch
       means the alignment itself is broken, and raises rather than
@@ -597,7 +597,7 @@ def locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm=None):
     # outermost (last) column of the c-stem 3' strand; stem3_cols[0] is the
     # INNERMOST column (adjacent to the loop). var_loop's boundary must start
     # after the whole c-stem ends. Starting it after the innermost column
-    # instead lets var_loop's own assign_slots call overwrite the c-stem-3
+    # instead, var_loop's own assign_slots call overwrites the c-stem-3
     # columns between [0] and [-1] with var-loop labels: on mt-Glu, columns
     # that should be Sprinzl 40-43 (c_stem3) came out as 44-47 (var_loop).
     c_close = c_stem["stem3_cols"][-1] if c_stem else None
@@ -610,17 +610,17 @@ def locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm=None):
         d_stem = max(before, key=lambda g: len(g["stem_cols"])) if before else None
         # t-arm is the last (highest-position) stem after c-close.
         # min(after) breaks for class-ii tRNAs (ser, leu) and some tRNAs
-        # with a variable arm stem: it picks the variable arm as t-arm instead.
+        # with a variable arm stem: it returns the variable arm as t-arm instead.
         t_stem = max(after, key=lambda g: g["stem5_cols"][0]) if after else None
         # a class-ii variable-ARM stem (Leu, Ser) is whatever is left in
-        # `after` besides t_stem; only trusted when exactly one such candidate
+        # `after` besides t_stem; only used when exactly one such candidate
         # remains. With a single "after" candidate, topology alone cannot tell
         # a bare variable arm from a missing T-arm. That ambiguous case goes to
         # the missing_arm machinery (mito.classify_arm_loss) rather than being
-        # guessed at here.
+        # inferred here.
         v_candidates = [g for g in after if g is not t_stem]
         v_stem = v_candidates[0] if len(v_candidates) == 1 else None
-        # a sequence that deleted every base of the arm has no arm to number
+        # an arm with every base deleted has nothing to number
         if v_stem and not _occupied_count(seq, v_stem["stem5_cols"]
                                           + v_stem["loop_cols"] + v_stem["stem3_cols"]):
             v_stem = None
@@ -635,10 +635,10 @@ def locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm=None):
     t_open = t_stem["stem5_cols"][0] if t_stem else None
 
     # acceptor STRAND boundaries, not member sets: an acceptor-internal bulge
-    # (a '.' between two paired acceptor columns) belongs to the acceptor, so
-    # var_loop/linker_5 must stop at the strand edge, not sieve out only the
-    # literal paired columns and thereby swallow the bulge (which then gets a
-    # wrong D-connector or V-loop label instead of an acceptor insertion).
+    # (a '.' between two paired acceptor columns) belongs to the acceptor.
+    # var_loop/linker_5 stop at the strand edge rather than sieving out only
+    # the literal paired columns, which would absorb the bulge and label it a
+    # D-connector or V-loop position instead of an acceptor insertion.
     acceptor_3_start = topo["acceptor_3"][0]   # stem3_cols is sorted ascending
     acceptor_5_end = topo["acceptor_5"][-1]
 
@@ -673,8 +673,8 @@ def locate_anticodon_stem(topo, ss, seq, anticodon, missing_arm=None):
     linker_5_end = d_stem5[0] if d_stem else (c_stem5[0] if c_stem else acceptor_3_start)
 
     # a short or RNAfold-patched T-stem can leave unpaired nts between its 3'
-    # end and the acceptor 3' strand; fold them into the T-stem-3' run so
-    # assign_slots numbers them (65, then 65A...) instead of leaving them blank.
+    # end and the acceptor 3' strand; fold them into the T-stem-3' run for
+    # assign_slots to number (65, then 65A...) instead of leaving them blank.
     t_stem3 = t_stem["stem3_cols"] if t_stem else []
     if t_stem3:
         t_stem3 = t_stem3 + [p for p in range(t_stem3[-1] + 1, acceptor_3_start) if ss[p] == "."]
@@ -715,10 +715,10 @@ def _assign_anticodon_loop(labels, seq, c_loop, anticodon):
     within the loop, not sequential order from the loop's 5' edge. a loop
     that isn't exactly the canonical 7nt (a stem-edge nucleotide the CM
     mis-threaded into the loop, or any other irregular split) would otherwise
-    shift the anticodon off 34-35-36, the tool's core deliverable, even
-    though its actual position is already known. among multiple coincidental
-    matches within the loop, picks whichever is closest to the loop's own
-    center, since the true anticodon is always the centered occurrence.
+    shift the anticodon off 34-35-36 even though its position is already
+    known. among multiple coincidental matches within the loop, takes the one
+    closest to the loop's own center: the true anticodon is always the
+    centered occurrence.
     fewer than 2 nt on either side of the anticodon leaves those canonical
     slots (32/33 or 37/38) simply unused, same as assign_slots elsewhere;
     more than 2 overflows via assign_slots' normal letter-suffix mechanism.
@@ -821,8 +821,8 @@ def sprinzl_map(ss, seq, anticodon, missing_arm=None):
 
     # strand ranges (first..last paired column of each stem strand); a
     # single-sided bulge is an unpaired column WITHIN one of these, which forgi
-    # leaves outside the stem's own stem/loop columns. pass them so
-    # _fill_stem_bulges only fills positions inside a stem's span.
+    # leaves outside the stem's own stem/loop columns. passing them limits
+    # _fill_stem_bulges to positions inside a stem's span.
     strands = [topo["acceptor_5"], topo["acceptor_3"]]
     for g in topo["inner_stems"]:
         strands += [g["stem5_cols"], g["stem3_cols"]]
@@ -839,11 +839,11 @@ def _fill_stem_bulges(labels, ss, strands):
     against `strands` (each stem strand's first..last column span): only an
     unlabeled '.' that a stem actually spans counts as a bulge. every such
     bulge seen in tRNA data is a cmalign insert column (#=GC RF == '.') and
-    never a model-consensus position, and the Sprinzl scheme has no canonical
-    number for a stem bulge, so a suffix is the right label. mutates labels in
-    place. an unlabeled '.' outside every stem strand, or any unlabeled paired
-    column, is left alone so a different bug surfaces here rather than getting
-    silently patched over."""
+    never a model-consensus position. the Sprinzl scheme has no canonical
+    number for a stem bulge; a suffix is the label used here. mutates labels
+    in place. an unlabeled '.' outside every stem strand, or any unlabeled
+    paired column, is left alone. a different bug then surfaces here rather
+    than being patched over silently."""
     owned = set()
     for strand in strands:
         if strand:
@@ -883,15 +883,15 @@ def _fill_stem_bulges(labels, ss, strands):
 # and the current label's insertion pool are exhausted, any further occupied
 # column gets a generic letter suffix on the last label used (e.g. "21A").
 #
-# This all stays in raw (unstripped) column space, so parse_topology and
+# This all stays in raw (unstripped) column space. parse_topology and
 # locate_anticodon_stem take the CM's own ss_cons dot-bracket collapse
-# directly: it is well-formed on its own, fixed per CM, with no per-sequence
-# gap bookkeeping required to call them.
+# directly: it is well-formed on its own, fixed per CM, and needs no
+# per-sequence gap bookkeeping to call them.
 
 
 def _next_suffix(anchor, counts):
     """anchor + next unused letter (A, B, ..., Z, AA, ...); counts is shared
-    across a block's calls so overflow letters for one anchor stay sequential."""
+    across a block's calls, keeping one anchor's overflow letters sequential."""
     n = counts.get(anchor, 0)
     counts[anchor] = n + 1
     letter = chr(ord("A") + n) if n < 26 else f"A{chr(ord('A') + n - 26)}"
@@ -905,17 +905,17 @@ def _iter_block_labels(cols, core_slots, is_match, is_occupied, insertion_pools,
 
     is_match(col) and is_occupied(col) classify each column; insertion_pools
     is {core_label: [reserved_codes]}; suffix_counts accumulates overflow
-    letters per anchor label so repeated calls for one block stay sequential.
+    letters per anchor label, keeping repeated calls for one block sequential.
 
-    anchor seeds the running label with the preceding block's last one, so an
+    anchor seeds the running label with the preceding block's last one. an
     insert-state column at this block's 5' edge (reached before any core slot
-    is consumed) still has something to suffix onto: a D-loop leading insert
+    is consumed) then has a label to suffix onto: a D-loop leading insert
     becomes 13A, off the last D-stem-5' position."""
     exhausted = object()
     core_iter = iter(core_slots)
     pool_used = defaultdict(int)
-    # current stays the last CORE label, so consecutive overflows read 60A,
-    # 60B, 60C rather than compounding into 60A, 60AA, 60AAA.
+    # current stays the last CORE label. consecutive overflows then read
+    # 60A, 60B, 60C rather than compounding into 60A, 60AA, 60AAA.
     current, label = anchor, None
     for col in cols:
         occ = is_occupied(col)
@@ -1025,7 +1025,7 @@ def _assign_anticodon_loop_block(labels, cols, ss_cons, aligned_seq, raw_to_fina
                                   anticodon, suffix_counts, anchor=None):
     """locate the anticodon among the loop's occupied columns (centered-match,
     same anchoring as _assign_anticodon_loop), then run the flanking
-    raw-column ranges through _assign_block so an indel there is handled by
+    raw-column ranges through _assign_block, which puts an indel there under
     the same core/insertion-pool rule as every other block. returns the last
     label written, same contract as _assign_block."""
     ac = (anticodon or "").upper().replace("T", "U")
@@ -1055,12 +1055,12 @@ def _assign_anticodon_loop_block(labels, cols, ss_cons, aligned_seq, raw_to_fina
 
 
 # a D-loop shorter than its eight slots loses length at the dihydrouridine
-# positions, so 16, 17 and 20 give their bases up before 14, 15, 18, 19 and 21,
-# which Biela et al. 2023 lists among the nucleotides conserved across tRNAs.
+# positions. 16, 17 and 20 empty before 14, 15, 18, 19 and 21, which Biela
+# et al. 2023 list among the nucleotides conserved across tRNAs.
 # Order taken from Suzuki et al. 2020's curated human mt-tRNAs.
 D_LOOP_DROP_ORDER = ["17", "20", "16", "19", "18"]
 
-# the D-loop takes its extra bases at 20a/20b far more often than at 17a
+# extra D-loop bases fall at 20a/20b far more often than at 17a
 D_LOOP_INSERTION_ORDER = ["20a", "20b", "17a"]
 
 # T-arm insertion codes. Suzuki et al. 2020 read them as loop insertions.
@@ -1075,26 +1075,26 @@ T_LOOP_DROP_ORDER = ["53a", "60a", "60", "54", "59", "55"]
 
 # 44, 45, 46 and 48 each hold a tertiary contact: G26-A44, G10-C25-G45,
 # C13-G22-G46 and the Levitt pair G15-C48 (Biela et al. 2023). 47 holds none and
-# gives its base up first. Nothing orders the other four against each other, so
-# a block needing a second drop is left to the model.
+# empties first. Nothing orders the other four against each other. A block
+# needing a second drop is left to the model.
 V_LOOP_DROP_ORDER = ["47"]
 
 SLOT_DROP_ORDER = {"d_loop": D_LOOP_DROP_ORDER, "t_loop": T_LOOP_DROP_ORDER,
                    "v_loop": V_LOOP_DROP_ORDER}
 
-# slots either side of the conserved 18-19 pair, spent outward from it
+# slots either side of the conserved 18-19 pair, filled outward from it
 D_LOOP_5P_SLOTS = ["14", "15", "16", "17", "17a"]
 D_LOOP_3P_SLOTS = ["20", "20a", "20b"]
 
 
 def _d_loop_slots_from_gg(bases):
-    """slots for a D-loop, seating the GG that Biela et al. 2023 report at 18
-    and 19 on those two positions and spending the rest outward from it. None
+    """slots for a D-loop, placing the GG that Biela et al. 2023 report at 18
+    and 19 on those two positions and filling the rest outward from it. None
     when no GG lies close enough to 18 to be that pair.
 
     Counting slots from 14 instead gets the common eight-base loop wrong: it
-    fills 14-21 solid, which lands the GG on 17-18, because 17 stays empty
-    until a loop is long enough to need it."""
+    fills 14-21 solid, which lands the GG on 17-18. 17 remains empty until the
+    loop is long enough to require it."""
     n = len(bases)
     for k in range(3, min(len(D_LOOP_5P_SLOTS), n - 2) + 1):
         if bases[k] != "G" or bases[k + 1] != "G":
@@ -1102,8 +1102,8 @@ def _d_loop_slots_from_gg(bases):
         after = n - k - 2
         if after > len(D_LOOP_3P_SLOTS) + 1:
             return None
-        # 21 closes the loop against the D-stem and takes the last base;
-        # 20/20a/20b fill the gap left in front of it
+        # 21 closes the loop against the D-stem and holds the last base;
+        # 20/20a/20b fill the gap in front of it
         tail = D_LOOP_3P_SLOTS[:after - 1] + ["21"] if after else []
         return D_LOOP_5P_SLOTS[:k] + ["18", "19"] + tail
     return None
@@ -1112,7 +1112,7 @@ def _d_loop_slots_from_gg(bases):
 def _shrink_slots(core_slots, n_bases, drop_order):
     """core_slots cut down to n_bases entries, dropping in drop_order and
     keeping the rest in Sprinzl order. Leaving the choice to the CM instead puts
-    the gap wherever its deletions fell, which strands a conserved position."""
+    the gap wherever its deletions fell, which can empty a conserved position."""
     # an order may name slots this block does not have, and those must not
     # count toward the number dropped
     candidates = [slot for slot in drop_order if slot in core_slots]
@@ -1121,10 +1121,10 @@ def _shrink_slots(core_slots, n_bases, drop_order):
 
 
 def _expand_slots(core_slots, n_bases, insertion_pools, code_order=()):
-    """core_slots grown toward n_bases by spending reserved insertion codes at
-    their anchors. Bases beyond the core count give the number of insertions,
-    so every core slot keeps a base and the spares take the reserved codes.
-    code_order picks which codes go first; anything left over follows in
+    """core_slots grown toward n_bases by drawing reserved insertion codes at
+    their anchors. Bases beyond the core count give the number of insertions.
+    Every core slot then holds a base and the spares take the reserved codes.
+    code_order sets which codes come first; anything left over follows in
     anchor order."""
     extra = n_bases - len(core_slots)
     available = [(slot, code) for slot in core_slots for code in insertion_pools.get(slot, ())]
@@ -1142,10 +1142,10 @@ def _absorb_unclaimed_columns(specs):
     """extend each block to cover every column up to the next block's start,
     given specs already sorted by start column.
 
-    forgi reports a stem's paired columns only, so a stem-internal bulge lands
-    in no block's own column list and would otherwise go unlabeled. Handing it
-    to the enclosing block puts it through the same insertion rule as any
-    other unpaired column, which suffixes it onto the label before it."""
+    forgi reports a stem's paired columns only. A stem-internal bulge lands in
+    no block's own column list and would go unlabeled. Assigning it to the
+    enclosing block puts it through the same insertion rule as any other
+    unpaired column, which suffixes it onto the label before it."""
     out = []
     for i, (cols, core_slots, pools, mode) in enumerate(specs):
         if i + 1 < len(specs):
@@ -1251,12 +1251,12 @@ def sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None,
     labels, suffix_counts, anchor = {}, {}, None
     for cols, core_slots, pools, mode in specs:
         # a block holding exactly as many bases as it has slots has only one
-        # consistent labelling. The CM's view of which columns are matches
-        # carries no extra information there, and acting on it does harm when
-        # the CM threaded the block poorly, which mt-tRNA loops frequently do
-        # (bases parked in insert columns while the consensus columns beside
-        # them are called deletions). read match/insert state only where the
-        # counts disagree and the placement is in question.
+        # consistent labelling. the CM's match/insert assignment carries no
+        # extra information there, and following it degrades the result when
+        # the CM threaded the block poorly. mt-tRNA loops thread poorly often:
+        # bases fall in insert columns while the consensus columns beside them
+        # are called deletions. read match/insert state only where the counts
+        # disagree and the placement is in question.
         n_bases = _occupied_count(aligned_seq, cols)
         if mode == "d_loop":
             anchored = _d_loop_slots_from_gg(_occupied_bases(aligned_seq, cols))
@@ -1283,20 +1283,20 @@ def sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None,
     return labels
 # --- stem register correction (--wc) ---
 
-# a helix seated further off than this is a threading failure, handled by
+# a helix displaced further than this is a threading failure, handled by
 # mito's RNAfold patch instead
 MAX_STEM_SLIDE = 2
 
 
 def slide_offsets(max_slide):
-    """offsets to try, nearest first: the smallest move that gains wins."""
+    """offsets to try, nearest first. the smallest move that gains is taken."""
     return sorted([d for d in range(-max_slide, max_slide + 1) if d],
                   key=lambda d: (abs(d), d))
 
 
 def _stem_pairs(ss, group):
     """(5' col, 3' col) for each paired column of one stem group, read from the
-    pair table so a merged stem with a bulge keeps its true partners."""
+    pair table, which gives a merged stem with a bulge its true partners."""
     pt = RNA.ptable(ss)
     return [(i, pt[i + 1] - 1) for i in group["stem5_cols"] if pt[i + 1] > i + 1]
 
@@ -1342,8 +1342,8 @@ def _column_offset_for_bases(aligned_seq, edge, steps, direction, taken):
     Only columns holding a base count, which steps over deletions, and only
     columns claimed by no other helix, which keeps the count from running
     through a neighbouring stem. Returns None when another helix or the end of
-    the sequence arrives first: with no free base to move onto, there is
-    nothing to slide."""
+    the sequence intervenes: with no free base to move onto, there is nothing
+    to slide."""
     seen, col = 0, edge + direction
     while 0 <= col < len(aligned_seq):
         if col in taken:
@@ -1357,17 +1357,17 @@ def _column_offset_for_bases(aligned_seq, edge, steps, direction, taken):
 
 
 def slide_stems_in_alignment(aligned_seq, ss_cons, max_slide=1, header=""):
-    """re-seat internal stems on the consensus line; returns a new ss_cons.
+    """move internal stems along the consensus line; returns a new ss_cons.
 
-    The whole helix moves by one column offset and stays a helix. The offset
+    The whole helix moves by one column offset and remains a helix. The offset
     is measured in free bases rather than columns: one step lands on the next
     base claimed by no other helix, stepping over deletions.
 
-    The anticodon stem stays put, since the numbering is anchored to it, and
-    the acceptor stem is '(' ')' in WUSS so it is never a candidate. A move
-    needs a strict gain in WC/wobble pairs. max_slide of 0 disables sliding;
-    ss_cons also comes back unchanged when the anticodon stem cannot be
-    identified by stem count."""
+    The anticodon stem does not move: the numbering is anchored to it. The
+    acceptor stem is '(' ')' in WUSS and is never a candidate. A move needs a
+    strict gain in WC/wobble pairs. max_slide of 0 disables sliding; ss_cons
+    also comes back unchanged when the anticodon stem cannot be identified by
+    stem count."""
     if max_slide < 1:
         return ss_cons
     stems = wuss_stems(ss_cons)
@@ -1472,19 +1472,18 @@ def close_bulges_in_unstable_stems(aligned_seq, db, ss_cons, header="", *, enabl
 
 def slide_stems_to_improve_pairing(seq, ss, anticodon, missing_arm=None, header="",
                                     max_slide=1):
-    """re-seat stems that pair better a position or two along; returns the
+    """move stems that pair better a position or two along; returns the
     corrected dot-bracket structure.
 
     For a gap-free structure, where one position is one base. The alignment
     equivalent is slide_stems_in_alignment; mito's RNAfold-patched arms come
     here instead, having a fold but no alignment behind them.
 
-    Both strands move by one offset, so a stem keeps its length, bulges and
-    loop and only changes position. A slide needs a strict gain in WC/wobble
-    pairs, takes the smallest offset that gives one, and may not land on
-    another stem's columns. max_slide bounds how far it may travel. The
-    acceptor and anticodon stems stay put, since the rest of the numbering is
-    anchored to them.
+    Both strands move by one offset. A stem keeps its length, bulges and loop,
+    and changes only position. A slide needs a strict gain in WC/wobble pairs,
+    takes the smallest offset that gives one, and may not land on another
+    stem's columns. max_slide bounds the distance. The acceptor and anticodon
+    stems do not move: the rest of the numbering is anchored to them.
 
     Human MT-TS1 motivates this: every canonical CM in the library seats its
     D-stem with two mismatched pairs, one base off a fully paired register."""
