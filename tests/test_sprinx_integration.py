@@ -139,7 +139,8 @@ def test_process_one_record_populates_rnafold_only_ss_for_patched_sequences():
     val_key = next(k for k in seqs if "Val|UAC|Homo" in k)
     armless = mito.index_armless_cms(MITO_ARMLESS_CM_DIR)
     result = mito.process_mito_record(
-        (val_key, seqs[val_key], MITO_CANONICAL_CM, armless, False, False))
+        (val_key, seqs[val_key], MITO_CANONICAL_CM, armless, False,
+         common.StructureCorrections(max_slide=0)))
     assert result["cm_only_ss"] is not None
     assert result["rnafold_only_ss"] is not None
     assert result["rnafold_only_ss"] != result["cm_only_ss"]
@@ -462,7 +463,9 @@ def test_process_cyto_record_synthetic_consensus(domain):
     isotype_index = cyto.index_isotype_cms(cm_db_path)
     for header, seq in seqs.items():
         aa = common.header_to_aa(header)
-        result = cyto.process_cyto_record((header, seq, cm_db_path, isotype_index, False, False))
+        result = cyto.process_cyto_record(
+            (header, seq, cm_db_path, isotype_index, False,
+             common.StructureCorrections(max_slide=0)))
         assert result["summary"] == f"CM:{domain}-{aa}", header
         assert len(result["rows"]) == len(seq), header
         assert all(row["sprinzl_position"] for row in result["rows"]), header
@@ -479,7 +482,8 @@ def test_process_cyto_record_real_isotype_numbered_headers(domain):
     for header_substr in CYTO_REAL_ISOTYPE_CASES[domain]:
         header = next(h for h in seqs if header_substr in h)
         result = cyto.process_cyto_record(
-            (header, seqs[header], cm_db_path, isotype_index, False, False))
+            (header, seqs[header], cm_db_path, isotype_index, False,
+             common.StructureCorrections(max_slide=0)))
         assert result["summary"].startswith("CM:"), header
         assert result["rows"], header
 
@@ -512,7 +516,8 @@ def euk_gtrnadb_labels():
     seqs = _load_fasta_file(os.path.join(CYTO_DATA_DIR, "euk_gtrnadb.fa"))
     cm_db_path = cyto.default_cm_db_path("euk")
     isotype_index = cyto.index_isotype_cms(cm_db_path)
-    tasks = [(header, seq, cm_db_path, isotype_index, False, 1) for header, seq in seqs.items()]
+    tasks = [(header, seq, cm_db_path, isotype_index, False, common.StructureCorrections())
+             for header, seq in seqs.items()]
     with multiprocessing.Pool(4) as pool:
         results = pool.map(cyto.process_cyto_record, tasks)
 

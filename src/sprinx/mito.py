@@ -668,7 +668,7 @@ def process_mito_record(args):
     - per-tier canonical CM resolution (which .cm path applies to this aa,
       if any) happens inside select_cm_and_align; see
       _resolve_canonical_for_tier."""
-    header, seq, canonical_cm_tiers, armless_cm_index, debug, wc = args
+    header, seq, canonical_cm_tiers, armless_cm_index, debug, corrections = args
     seq = seq.upper().replace("T", "U")
 
     if debug:
@@ -713,12 +713,14 @@ def process_mito_record(args):
         # a patched arm's structure came from RNAfold, which produces a fold
         # and no alignment, so there is no match/insert state to label from.
         # these records go through the structure-only mapper.
-        if wc:
+        if corrections.max_slide:
             final_ss = slide_stems_to_improve_pairing(
-                final_seq, final_ss, anticodon, missing_arm, header, max_slide=wc)
+                final_seq, final_ss, anticodon, missing_arm, header,
+                max_slide=corrections.max_slide)
         sprinzl = sprinzl_map(final_ss, final_seq, anticodon, missing_arm)
     else:
-        sprinzl = sprinzl_map_from_alignment(alignment, anticodon, missing_arm, wc=wc, header=header)
+        sprinzl = sprinzl_map_from_alignment(alignment, anticodon, missing_arm,
+                                             corrections, header=header)
 
     unlabeled = [i for i in range(len(final_seq)) if i not in sprinzl]
     if unlabeled:

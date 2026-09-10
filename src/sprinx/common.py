@@ -18,7 +18,7 @@ import subprocess
 import sys
 import tempfile
 import warnings
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 
 import RNA
 from forgi.graph.bulge_graph import BulgeGraph
@@ -1154,16 +1154,27 @@ def _absorb_unclaimed_columns(specs):
     return out
 
 
-def sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None, wc=False, header=""):
+# the two structure corrections applied before labeling. both reach the
+# workers from the same CLI options. max_slide feeds slide_stems_in_alignment,
+# close_bulges feeds close_bulges_in_unstable_stems.
+StructureCorrections = namedtuple("StructureCorrections",
+                                  ["max_slide", "close_bulges"],
+                                  defaults=(1, True))
+DEFAULT_CORRECTIONS = StructureCorrections()
+
+
+def sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None,
+                               corrections=DEFAULT_CORRECTIONS, header=""):
     """assign a Sprinzl label to every occupied column by reading match/
     insert/deletion status directly off cmalign's raw output (see module
     note above).
 
     - alignment: cmalign_one's return dict (raw aligned_seq/ss_cons, gapped).
     - anticodon, missing_arm: same meaning as sprinzl_map.
-    - wc: how far a stem may be re-seated by base-pairing first (see
-      slide_stems_to_improve_pairing); 0 skips it. sliding is by occupied
-      columns, so a step moves the helix one base.
+    - corrections: a StructureCorrections. max_slide is how far a stem may
+      move to pair better (see slide_stems_to_improve_pairing); 0 skips it.
+      Steps count occupied columns. One step moves the helix one base.
+      close_bulges is False to skip close_bulges_in_unstable_stems.
     - a sequence whose structure did not come from cmalign has no match/insert
       state to read and belongs on sprinzl_map instead; see mito's
       threading-failure branch.
@@ -1172,8 +1183,11 @@ def sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None, wc=False,
       with finalize_structure(alignment) for final_seq/final_ss."""
     aligned_seq, ss_cons = alignment["aligned_seq"], alignment["ss_cons"]
     raw_to_final = _raw_to_final_index(aligned_seq)
-    ss_cons = slide_stems_in_alignment(aligned_seq, ss_cons, max_slide=wc, header=header)
+    ss_cons = slide_stems_in_alignment(aligned_seq, ss_cons,
+                                       max_slide=corrections.max_slide, header=header)
     raw_db = drop_orphan_brackets(RNA.db_from_WUSS(ss_cons))
+    raw_db = close_bulges_in_unstable_stems(aligned_seq, raw_db, ss_cons, header=header,
+                                            enabled=corrections.close_bulges)
     topo = parse_topology(raw_db)
     arms = locate_anticodon_stem(topo, raw_db, aligned_seq, anticodon, missing_arm)
 
@@ -1401,6 +1415,59 @@ def _best_slide(aligned_seq, pairs, edge5, edge3, steps, taken, base):
         if _count_wc(aligned_seq, moved) > base:
             return moved
     return None
+
+
+def close_bulges_in_unstable_stems(aligned_seq, db, ss_cons, header="", *, enabled=True):
+    """make a bulged stem's pairs run contiguously; returns the dot-bracket
+    structure with those stems rewritten, or db when disabled.
+
+    Rewrites a stem-loop when all three hold:
+    - the sequence fills fewer loop columns than ss_cons marks as match states
+    - the bulged structure has free energy >= 0 kcal/mol
+    - the same pairs without the gap have free energy < 0
+
+    Energies come from RNA.energy_of_struct over the arm span. Loop width is
+    read per stem-loop from ss_cons."""
+    if not enabled:
+        return db
+    rewritten_db = list(db)
+    for stem_loop in get_stem_loop_elements(db):
+        # _stem_pairs pairs alignment columns. a deletion at either end leaves
+        # this sequence with no base to pair there
+        occupied_pairs = [(five_col, three_col)
+                          for five_col, three_col in _stem_pairs(db, stem_loop)
+                          if _is_occupied(aligned_seq, five_col)
+                          and _is_occupied(aligned_seq, three_col)]
+        n_loop_bases = _occupied_count(aligned_seq, stem_loop["loop_cols"])
+        model_loop_width = sum(1 for col in stem_loop["loop_cols"]
+                               if ss_cons[col] != ".")
+        if len(occupied_pairs) < 2 or n_loop_bases >= model_loop_width:
+            continue
+        arm_start, arm_end = occupied_pairs[0]
+        occupied_arm_cols = [col for col in range(arm_start, arm_end + 1)
+                             if _is_occupied(aligned_seq, col)]
+        n_contiguous_loop_bases = (len(occupied_arm_cols)
+                                   - 2 * len(occupied_pairs))
+        if n_contiguous_loop_bases <= n_loop_bases:  # no base bulged out
+            continue
+        arm_seq = "".join(aligned_seq[col].upper() for col in occupied_arm_cols)
+        bulged_db = drop_orphan_brackets(
+            "".join(db[col] for col in occupied_arm_cols))
+        contiguous_db = ("(" * len(occupied_pairs)
+                         + "." * n_contiguous_loop_bases
+                         + ")" * len(occupied_pairs))
+        bulged_energy = RNA.energy_of_struct(arm_seq, bulged_db)
+        contiguous_energy = RNA.energy_of_struct(arm_seq, contiguous_db)
+        if not (bulged_energy >= 0 > contiguous_energy):
+            continue
+        logger.info(f"{header}: closed a stem bulge at column {arm_start} "
+                    f"({bulged_energy:+.2f} -> {contiguous_energy:+.2f} kcal/mol, "
+                    f"{n_loop_bases} bases in {model_loop_width} loop columns)")
+        for col in range(arm_start, arm_end + 1):
+            rewritten_db[col] = "."
+        for col, bracket in zip(occupied_arm_cols, contiguous_db):
+            rewritten_db[col] = bracket
+    return "".join(rewritten_db)
 
 
 def slide_stems_to_improve_pairing(seq, ss, anticodon, missing_arm=None, header="",

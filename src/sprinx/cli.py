@@ -23,7 +23,11 @@ import pandas as pd
 from Bio import SeqIO
 from loguru import logger
 
-from sprinx.common import _configure_logging, check_cm_source_formats
+from sprinx.common import (
+    StructureCorrections,
+    _configure_logging,
+    check_cm_source_formats,
+)
 
 MITO_SCHEME = "mito"
 CYTO_SCHEMES = ("euk", "arch", "bact")
@@ -96,7 +100,8 @@ def _run_mito(args, records):
                 f"{len(armless_cm_index)} armless CMs available for rerouting, "
                 f"{args.processes} worker process(es)")
 
-    tasks = [(header, seq, canonical_cm_tiers, armless_cm_index, args.debug, args.wc)
+    corrections = StructureCorrections(args.wc, args.close_unstable_bulges)
+    tasks = [(header, seq, canonical_cm_tiers, armless_cm_index, args.debug, corrections)
              for header, seq in records]
     return _run_pool(process_mito_record, tasks, args.processes)
 
@@ -111,7 +116,8 @@ def _run_cyto(args, records):
     logger.info(f"{len(records)} sequences, isotype CM database: {cm_db} "
                 f"({len(isotype_index)} CMs), {args.processes} worker process(es)")
 
-    tasks = [(header, seq, cm_db, isotype_index, args.debug, args.wc)
+    corrections = StructureCorrections(args.wc, args.close_unstable_bulges)
+    tasks = [(header, seq, cm_db, isotype_index, args.debug, corrections)
              for header, seq in records]
     return _run_pool(process_cyto_record, tasks, args.processes)
 
@@ -159,6 +165,12 @@ def main():
                              "register, 2 also allows moving over a position. only applied "
                              "on a strict gain in Watson-Crick/wobble pairs, so a "
                              "well-threaded stem is left alone")
+    parser.add_argument("--close-unstable-bulges", action=argparse.BooleanOptionalAction,
+                        default=True,
+                        help="close the gap in a bulged stem when the sequence fills fewer "
+                             "loop columns than the CM reserves. also requires negative "
+                             "free energy without the gap and non-negative with it. "
+                             "on by default")
     parser.add_argument("--debug", action="store_true",
                         help="log alignment, arm-loss diagnosis, and CM routing for every sequence")
     args = parser.parse_args()
