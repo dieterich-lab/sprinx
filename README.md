@@ -416,4 +416,4 @@ Paths in `.env` must be absolute. Relative paths fail silently the moment
 
 ## License
 
-GPL-3.0-or-later. See [LICENSE](LICENSE).
+Apache-2.0. See [LICENSE](LICENSE).

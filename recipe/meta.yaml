@@ -50,7 +50,7 @@ about:
     evidence, and rerouting true armless sequences to a matching armless
     CM. A component of the qutrna2 pipeline, published standalone for
     transparency and reuse; not a general-purpose tRNA annotator.
-  license: GPL-3.0-or-later
+  license: Apache-2.0
   license_file: LICENSE
 
 extra:
