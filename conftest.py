@@ -1,9 +1,9 @@
-# conftest.py -- pytest session setup; loads integration config before tests.
-# resolution order (setdefault: first write wins; shell exports beat all):
-#   1. shell export: SPRINX_CANONICAL_CM=... pytest
-#   2. .env at project root (committed, gitignored only if it contains secrets;
-#      these are paths not secrets so committing is fine -- see .env.example)
-# absolute paths required; relative paths fail silently when cwd differs.
+# integration tests skip if SPRINX_CANONICAL_CM /SPRINX_ARMLESS_CM_DIR are unset
+
+# do `cp env.example .env` and set both to absolute paths
+# before running integratoin tests
+
+# OR do shell export of the variables before running pytest
 import os
 
 def _load_env(path):
@@ -14,6 +14,7 @@ def _load_env(path):
             line = line.strip()
             if line and not line.startswith("#") and "=" in line:
                 k, _, v = line.partition("=")
+                # setdefault: a variable keeps its value if already exported
                 os.environ.setdefault(k.strip(), v.strip())
 
 _load_env(os.path.join(os.path.dirname(__file__), ".env"))
