@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: If you use sprinx, please cite it using these metadata.
+title: sprinx
+abstract: >-
+  Assigns Sprinzl coordinates to cytosolic and mitochondrial tRNA sequences
+  by aligning each to an appropriate covariance model and interpreting the
+  resulting structure alignment.
+type: software
+authors:
+  - family-names: Mishra
+    given-names: Swastik
+    email: swastik.mishra@uni-heidelberg.de
+    orcid: https://orcid.org/0009-0000-4107-6384
+  - family-names: Dieterich
+    given-names: Christoph
+    orcid: https://orcid.org/0000-0001-9468-6311
+repository-code: https://github.com/dieterich-lab/sprinx
+license: Apache-2.0
+keywords:
+  - tRNA
+  - Sprinzl numbering
+  - covariance model
+  - sequence annotation

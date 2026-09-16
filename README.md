@@ -184,9 +184,10 @@ available after a plain `pip install`:
 
 - **`--scheme mito`** defaults to a bacterial whole-family CM first
   (mitochondria's bacterial ancestry makes it a good default guess), then a
-  per-AA metazoan directory (both from MitoFinder/tRNAscan-SE). Covers
-  metazoan mitochondrial tRNAs; a different clade needs its own CMs supplied
-  via `--canonical-cm`/`--armless-cm-dir` (see below for the expected shape).
+  per-AA metazoan directory (tRNAscan-SE and MiTFi respectively; see "Model
+  provenance" below). Covers metazoan mitochondrial tRNAs; a different clade
+  needs its own CMs supplied via `--canonical-cm`/`--armless-cm-dir` (see
+  below for the expected shape).
   See "Why not just pick the best-scoring model?" below for why order, not
   score, decides between multiple `--canonical-cm` sources.
   - For plant tRNAs (plastid or mitochondrial), add a eukaryotic CM as a
@@ -211,6 +212,20 @@ The repo's `data/mito/` and `data/cyto/` directories hold the FASTA test
 sequences the test suite and the examples above use (the CM databases
 themselves are under `src/sprinx/data/`, since they ship as package data);
 see "Layout" below.
+
+### Sources of the Covariance Models
+
+sprinx builds no covariance models of its own. The bundled ones come from
+three published sources, which a result depending on them should cite.
+
+- `TRNAinf-bact.cm`, `TRNAinf-euk.cm` and the per-isotype `TRNAinf-*-iso`
+  databases: tRNAscan-SE 2.0. Chan et al. Nucleic Acids Res.
+  2021;49(16):9077-9096. doi:10.1093/nar/gkab688
+- `mitofinder_models/Metazoa_*.cm`: the MiTFi mitochondrial models, as
+  distributed with MitoFinder. Juhling et al. Nucleic Acids Res.
+  2012;40(7):2833-2845. doi:10.1093/nar/gkr1131
+- The armless CM library: Ozerova et al. Genome Biol Evol.
+  2024;16(11):evae232. doi:10.1093/gbe/evae232
 
 ## Limitations
 

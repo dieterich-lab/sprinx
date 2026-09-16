@@ -1094,7 +1094,6 @@ wheels = [
 
 [[package]]
 name = "sprinx"
-version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "biopython" },
@@ -1123,7 +1122,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'test'" },
     { name = "viennarna" },
 ]
-provides-extras = ["viz", "test"]
+provides-extras = ["test", "viz"]
 
 [[package]]
 name = "tinycss2"
