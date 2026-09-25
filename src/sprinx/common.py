@@ -1026,11 +1026,10 @@ def _assign_plain_zip(labels, cols, core_slots, aligned_seq, raw_to_final,
 
 def _assign_anticodon_loop_block(labels, cols, ss_cons, aligned_seq, raw_to_final,
                                   anticodon, suffix_counts, anchor=None):
-    """locate the anticodon among the loop's occupied columns (centered-match,
-    same anchoring as _assign_anticodon_loop), then run the flanking
-    raw-column ranges through _assign_block, which puts an indel there under
-    the same core/insertion-pool rule as every other block. returns the last
-    label written, same contract as _assign_block."""
+    """Locate the anticodon among the loop's occupied columns (centered-match,
+    same anchoring as _assign_anticodon_loop), assign 34-36 to it, then label
+    the flanks: 32-33 through `_assign_block`, and 37-38 anhcored on loop's
+    edges. Returns the last label written, same as `_assign_block`."""
     ac = (anticodon or "").upper().replace("T", "U")
     occ_idx = [i for i, c in enumerate(cols) if _is_occupied(aligned_seq, c)]
     loop_seq = "".join(aligned_seq[cols[i]] for i in occ_idx).upper().replace("T", "U")
@@ -1053,8 +1052,15 @@ def _assign_anticodon_loop_block(labels, cols, ss_cons, aligned_seq, raw_to_fina
         if i < 3:
             labels[raw_to_final[c]] = str(34 + i)
             last = str(34 + i)
-    return _assign_block(labels, after, ["37", "38"], ss_cons, aligned_seq, raw_to_final,
-                         suffix_counts=suffix_counts, anchor=last)
+    # 38 anchors to the loop's 3' edge; an intron after 37 is an insertion
+    occupied_cols_after_anticodon = [col for col in after
+                                     if _is_occupied(aligned_seq, col)]
+    for i, col in enumerate(occupied_cols_after_anticodon):
+        last = ("37" if i == 0 else
+                "38" if i == len(occupied_cols_after_anticodon) - 1 else
+                _next_suffix("37", suffix_counts))
+        labels[raw_to_final[col]] = last
+    return last
 
 
 # a D-loop shorter than its eight slots loses length at the dihydrouridine
