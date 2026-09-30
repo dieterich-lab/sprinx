@@ -100,7 +100,8 @@ def _run_mito(args, records):
                 f"{len(armless_cm_index)} armless CMs available for rerouting, "
                 f"{args.processes} worker process(es)")
 
-    corrections = StructureCorrections(args.wc, args.close_unstable_bulges)
+    corrections = StructureCorrections(args.wc, args.close_unstable_bulges,
+                                       args.cca_tail)
     tasks = [(header, seq, canonical_cm_tiers, armless_cm_index, args.debug, corrections)
              for header, seq in records]
     return _run_pool(process_mito_record, tasks, args.processes)
@@ -116,7 +117,8 @@ def _run_cyto(args, records):
     logger.info(f"{len(records)} sequences, isotype CM database: {cm_db} "
                 f"({len(isotype_index)} CMs), {args.processes} worker process(es)")
 
-    corrections = StructureCorrections(args.wc, args.close_unstable_bulges)
+    corrections = StructureCorrections(args.wc, args.close_unstable_bulges,
+                                       args.cca_tail)
     tasks = [(header, seq, cm_db, isotype_index, args.debug, corrections)
              for header, seq in records]
     return _run_pool(process_cyto_record, tasks, args.processes)
@@ -171,6 +173,10 @@ def main():
                              "loop columns than the CM reserves. also requires negative "
                              "free energy without the gap and non-negative with it. "
                              "on by default")
+    parser.add_argument("--cca-tail", action="store_true",
+                        help="the input carries a CCA tail. labels the last four bases "
+                             "73-76 instead of reading them off the alignment. fails "
+                             "when a sequence does not end in CCA. off by default")
     parser.add_argument("--debug", action="store_true",
                         help="log alignment, arm-loss diagnosis, and CM routing for every sequence")
     args = parser.parse_args()

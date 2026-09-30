@@ -1163,13 +1163,32 @@ def _absorb_unclaimed_columns(specs):
     return out
 
 
-# the two structure corrections applied before labeling. both reach the
-# workers from the same CLI options. max_slide feeds slide_stems_in_alignment,
-# close_bulges feeds close_bulges_in_unstable_stems.
+# the corrections applied before labeling. all reach the workers from the same
+# CLI options. max_slide feeds slide_stems_in_alignment, close_bulges feeds
+# close_bulges_in_unstable_stems, cca_tail feeds _acceptor_3p_blocks.
 StructureCorrections = namedtuple("StructureCorrections",
-                                  ["max_slide", "close_bulges"],
-                                  defaults=(1, True))
+                                  ["max_slide", "close_bulges", "cca_tail"],
+                                  defaults=(1, True, False))
 DEFAULT_CORRECTIONS = StructureCorrections()
+
+
+def _acceptor_3p_blocks(topo, aligned_seq, cca_tail, header=""):
+    """(acceptor 3' columns, trailer columns) for the 66-72 and 73-76 blocks.
+
+    With cca_tail, 73-76 go to the last four bases of the sequence. Taking
+    them from the alignment fails often: cmalign pairs a CCA into the
+    acceptor stem and leaves the columns past the stem empty. Raises
+    ValueError when the last three bases are not CCA."""
+    if not cca_tail:
+        return topo["acceptor_3"], topo["trailer"]
+    occupied = [col for col in range(len(aligned_seq))
+                if _is_occupied(aligned_seq, col)]
+    tail = "".join(aligned_seq[col] for col in occupied[-3:]).upper().replace("T", "U")
+    if tail != "CCA":
+        raise ValueError(
+            f"{header}: --cca-tail passed but last three bases are not CCA!")
+    trailer = occupied[-4:]
+    return [col for col in topo["acceptor_3"] if col < trailer[0]], trailer
 
 
 def sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None,
@@ -1183,10 +1202,10 @@ def sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None,
     - corrections: a StructureCorrections. max_slide is how far a stem may
       move to pair better (see slide_stems_to_improve_pairing); 0 skips it.
       Steps count occupied columns. One step moves the helix one base.
-      close_bulges is False to skip close_bulges_in_unstable_stems.
-    - a sequence whose structure did not come from cmalign has no match/insert
-      state to read and belongs on sprinzl_map instead; see mito's
-      threading-failure branch.
+      close_bulges is False to skip close_bulges_in_unstable_stems. cca_tail
+      is True for input carrying a CCA tail; see _acceptor_3p_blocks.
+    - a sequence whose structure came from a fold lacks match/insert state,
+      and belongs on sprinzl_map; see mito's threading-failure branch.
     - returns {final_seq_index: label}, where final_seq_index matches
       finalize_structure's ungapped/uppercased seq (same base order) - pair
       with finalize_structure(alignment) for final_seq/final_ss."""
@@ -1210,9 +1229,11 @@ def sprinzl_map_from_alignment(alignment, anticodon, missing_arm=None,
         if cols:
             specs.append((list(cols), core_slots, None, "zip"))
 
+    acceptor_3, trailer = _acceptor_3p_blocks(topo, aligned_seq,
+                                              corrections.cca_tail, header)
     block(topo["acceptor_5"], [str(i) for i in range(1, 8)])
-    block(topo["acceptor_3"], [str(i) for i in range(66, 73)])
-    zip_block(topo["trailer"], ["73", "74", "75", "76"])
+    block(acceptor_3, [str(i) for i in range(66, 73)])
+    zip_block(trailer, ["73", "74", "75", "76"])
 
     d_loop_pools = {"17": ["17a"], "20": ["20a", "20b"]}
     if arms["d_stem5"]:
